@@ -5,10 +5,59 @@ import { generateInitialTrendPost } from './ai.js';
 import { executeTwoRoundTrendReviewLoop } from './reviewer.js';
 import { BloggerClient } from './blogger.js';
 import { TelegramNotifier } from './telegram.js';
+import { TrendTopic, TrendCategory } from './types.js';
+import { GoogleGenAI } from '@google/genai';
+import { generateContentWithFallback, safeJsonParse } from './model-resolver.js';
+
+async function resolveCustomTopic(apiKey: string, customKeyword: string): Promise<TrendTopic> {
+  const ai = new GoogleGenAI({ apiKey });
+  const prompt = `사용자가 지정한 실시간 트렌드 키워드: "${customKeyword}"
+이 키워드에 대해 다음 3가지 중 가장 적합한 카테고리를 판별하고, 호기심/클릭을 유발하는 어그로 후킹 포인트와 검색 쿼리를 작성하세요:
+- 'HOT_PLACE': 맛집, 핫플, 카페
+- 'SHOPPING_ITEM': 꿀템, 신제품, 쇼핑, 구매템
+- 'MEME_TREND': 화제의 밈, 과학/의학/바이오 이슈, 시사이슈, 신기술
+
+반드시 다음 JSON 형식으로만 응답하세요:
+{
+  "keyword": "${customKeyword}",
+  "category": "HOT_PLACE | SHOPPING_ITEM | MEME_TREND",
+  "categoryNameKo": "화제의 핫이슈 (또는 바이럴 꿀템, 핫플레이스)",
+  "headlineHook": "어그로 후킹 핵심 요약",
+  "sources": ["google_trends", "youtube", "naver_datalab"],
+  "matchScore": 100,
+  "searchQueries": ["${customKeyword} 원리", "${customKeyword} 최신 근황", "${customKeyword} 진실과 거짓"]
+}`;
+
+  try {
+    const res = await generateContentWithFallback(ai, {
+      contents: prompt,
+      config: { responseMimeType: 'application/json', temperature: 0.3 },
+    });
+    return safeJsonParse<TrendTopic>(res.text || '{}', {
+      keyword: customKeyword,
+      category: 'MEME_TREND' as TrendCategory,
+      categoryNameKo: '화제의 핫이슈 & 트렌드',
+      headlineHook: `${customKeyword}의 진실과 핵심 총정리`,
+      sources: ['google_trends', 'youtube', 'naver_datalab'],
+      matchScore: 100,
+      searchQueries: [`${customKeyword} 최신`, `${customKeyword} 팩트체크`],
+    });
+  } catch {
+    return {
+      keyword: customKeyword,
+      category: 'MEME_TREND' as TrendCategory,
+      categoryNameKo: '화제의 핫이슈 & 트렌드',
+      headlineHook: `${customKeyword}의 진실과 핵심 총정리`,
+      sources: ['google_trends', 'youtube', 'naver_datalab'],
+      matchScore: 100,
+      searchQueries: [`${customKeyword} 최신`, `${customKeyword} 팩트체크`],
+    };
+  }
+}
 
 async function runTrendPipeline() {
   console.log('\n================================================================');
-  console.log('🚀 [트렌드 자동화 파이프라인] 실시간 핫플·꿀템·밈 포스팅 가동');
+  console.log('🚀 [트렌드 자동화 파이프라인] 실시간 핫플·꿀템·밈·이슈 포스팅 가동');
   console.log('================================================================');
 
   const geminiApiKey = process.env.GEMINI_API_KEY;
@@ -24,9 +73,20 @@ async function runTrendPipeline() {
     throw new Error('GEMINI_API_KEY가 설정되지 않았습니다.');
   }
 
-  // --- 1단계: 3대 소스 교집합 1등 트렌드 주제 선정 ---
-  console.log('\n[1단계] 실시간 대세 트렌드 키워드 수집 및 교집합 분석...');
-  const topic = await selectTopTrendTopic(geminiApiKey);
+  // 커스텀 키워드 인자 확인 (--keyword="암백신" 또는 환경변수 CUSTOM_KEYWORD)
+  const keywordArg = process.argv.find((a) => a.startsWith('--keyword='));
+  const customKeyword = keywordArg ? keywordArg.split('=')[1].replace(/["']/g, '') : process.env.CUSTOM_KEYWORD;
+
+  let topic: TrendTopic;
+  if (customKeyword) {
+    console.log(`\n🎯 [지정 키워드 모드] 사용자가 지정한 키워드로 분석 진행: "${customKeyword}"`);
+    topic = await resolveCustomTopic(geminiApiKey, customKeyword);
+  } else {
+    // --- 1단계: 3대 소스 교집합 1등 트렌드 주제 자동 선정 ---
+    console.log('\n[1단계] 실시간 대세 트렌드 키워드 수집 및 교집합 분석...');
+    topic = await selectTopTrendTopic(geminiApiKey);
+  }
+
   console.log(`🎯 최종 선정 주제: "${topic.keyword}" (${topic.categoryNameKo})`);
   console.log(`   - 후킹 포인트: ${topic.headlineHook}`);
   console.log(`   - 탐지 소스: ${topic.sources.join(', ')} (신뢰도 점수: ${topic.matchScore}점)`);
@@ -39,7 +99,7 @@ async function runTrendPipeline() {
   const verifiedLinks = await verifyMultipleLinks(geminiApiKey, targetUrlsToVerify, topic);
 
   // --- 3단계: CTR 극대화 후킹 초안 생성 ---
-  console.log('\n[3단계] 점심시간 타겟 어그로 후킹 초안 작성 중...');
+  console.log('\n[3단계] 클릭률 극대화 후킹 초안 작성 중...');
   const initialPost = await generateInitialTrendPost(geminiApiKey, topic, verifiedLinks, coupangPartnersId);
   console.log(`📄 작성된 초안 제목: "${initialPost.title}"`);
 
