@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://trend.zozero94.com/sitemap.xml
