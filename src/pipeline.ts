@@ -73,7 +73,7 @@ async function runTrendPipeline() {
   // --- 6단계: 텔레그램 승인 알림 발송 ---
   if (telegramBotToken && telegramChatId && draftPost.id) {
     console.log('\n[6단계] 텔레그램 모바일 승인 알림 전송 중...');
-    const telegram = new TelegramNotifier(telegramBotToken, telegramChatId);
+    const telegram = new TelegramNotifier(telegramBotToken, telegramChatId, bloggerBlogId);
     await telegram.sendTrendDraftNotification(finalPost, topic, draftPost.id, reviewSummary);
   }
 

@@ -3,10 +3,12 @@ import { TrendPost, TrendTopic } from './types.js';
 export class TelegramNotifier {
   private botToken: string;
   private chatId: string;
+  private blogId: string;
 
-  constructor(botToken: string, chatId: string) {
+  constructor(botToken: string, chatId: string, blogId: string = '2498717653629376483') {
     this.botToken = botToken;
     this.chatId = chatId;
+    this.blogId = blogId;
   }
 
   async sendTrendDraftNotification(
@@ -42,8 +44,8 @@ Blogger ID: ${bloggerPostId}
     const inlineKeyboard = {
       inline_keyboard: [
         [
-          { text: '✅ 즉시 발행', callback_data: `publish:${bloggerPostId}` },
-          { text: '❌ 글 삭제', callback_data: `delete:${bloggerPostId}` },
+          { text: '✅ 즉시 발행', callback_data: `publish:${this.blogId}:${bloggerPostId}` },
+          { text: '❌ 글 삭제', callback_data: `delete:${this.blogId}:${bloggerPostId}` },
         ],
       ],
     };
