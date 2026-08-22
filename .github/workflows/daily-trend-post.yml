@@ -1,0 +1,38 @@
+name: Daily 12:00 Trend Auto-Posting Pipeline
+
+on:
+  schedule:
+    # 매일 한국시간 12:00 (UTC 03:00)
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  trend-posting:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install chromium --with-deps
+
+      - name: Execute Trend Auto-Posting Pipeline
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          BLOGGER_BLOG_ID: ${{ secrets.TREND_BLOGGER_BLOG_ID || '2498717653629376483' }}
+          BLOGGER_CLIENT_ID: ${{ secrets.BLOGGER_CLIENT_ID }}
+          BLOGGER_CLIENT_SECRET: ${{ secrets.BLOGGER_CLIENT_SECRET }}
+          BLOGGER_REFRESH_TOKEN: ${{ secrets.BLOGGER_REFRESH_TOKEN }}
+          COUPANG_PARTNERS_ID: ${{ secrets.COUPANG_PARTNERS_ID || 'AF2968960' }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: npm run pipeline

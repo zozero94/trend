@@ -1,0 +1,24 @@
+{
+  "name": "trend-blog-automation",
+  "version": "1.0.0",
+  "description": "AI Trend & Viral Auto-posting Webzine with Gemini, Blogger, Coupang & Telegram",
+  "main": "dist/pipeline.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "pipeline": "tsx src/pipeline.ts",
+    "test-pipeline": "tsx src/pipeline.ts --dry-run"
+  },
+  "dependencies": {
+    "@google/genai": "^2.18.0",
+    "dotenv": "^17.4.2",
+    "playwright-chromium": "^1.49.0",
+    "rss-parser": "^3.13.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "@vercel/node": "^5.10.2",
+    "tsx": "^4.23.12",
+    "typescript": "^7.0.2"
+  }
+}
