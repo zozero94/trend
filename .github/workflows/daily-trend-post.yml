@@ -32,13 +32,19 @@ jobs:
 
       - name: Execute Trend Auto-Posting Pipeline
         env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          BLOGGER_BLOG_ID: ${{ secrets.TREND_BLOGGER_BLOG_ID || '2498717653629376483' }}
-          BLOGGER_CLIENT_ID: ${{ secrets.BLOGGER_CLIENT_ID }}
-          BLOGGER_CLIENT_SECRET: ${{ secrets.BLOGGER_CLIENT_SECRET }}
-          BLOGGER_REFRESH_TOKEN: ${{ secrets.BLOGGER_REFRESH_TOKEN }}
-          COUPANG_PARTNERS_ID: ${{ secrets.COUPANG_PARTNERS_ID || 'AF2968960' }}
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY || vars.GEMINI_API_KEY || secrets.GOOGLE_GENAI_API_KEY || vars.GOOGLE_GENAI_API_KEY }}
+          GOOGLE_GENAI_API_KEY: ${{ secrets.GEMINI_API_KEY || vars.GEMINI_API_KEY || secrets.GOOGLE_GENAI_API_KEY || vars.GOOGLE_GENAI_API_KEY }}
+          BLOGGER_BLOG_ID: ${{ secrets.BLOGGER_BLOG_ID || vars.BLOGGER_BLOG_ID || secrets.TREND_BLOGGER_BLOG_ID || vars.TREND_BLOGGER_BLOG_ID || '2498717653629376483' }}
+          BLOGGER_CLIENT_ID: ${{ secrets.BLOGGER_CLIENT_ID || vars.BLOGGER_CLIENT_ID }}
+          BLOGGER_CLIENT_SECRET: ${{ secrets.BLOGGER_CLIENT_SECRET || vars.BLOGGER_CLIENT_SECRET }}
+          BLOGGER_REFRESH_TOKEN: ${{ secrets.BLOGGER_REFRESH_TOKEN || vars.BLOGGER_REFRESH_TOKEN }}
+          COUPANG_PARTNERS_ID: ${{ secrets.COUPANG_PARTNERS_ID || vars.COUPANG_PARTNERS_ID || 'AF2968960' }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN || vars.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID || vars.TELEGRAM_CHAT_ID }}
           CUSTOM_KEYWORD: ${{ github.event.inputs.keyword }}
-        run: npm run pipeline
+        run: |
+          if [ -n "$CUSTOM_KEYWORD" ]; then
+            npm run pipeline -- --keyword="$CUSTOM_KEYWORD"
+          else
+            npm run pipeline
+          fi

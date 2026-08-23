@@ -60,8 +60,8 @@ async function runTrendPipeline() {
   console.log('🚀 [트렌드 자동화 파이프라인] 실시간 핫플·꿀템·밈·이슈 포스팅 가동');
   console.log('================================================================');
 
-  const geminiApiKey = process.env.GEMINI_API_KEY;
-  const bloggerBlogId = process.env.BLOGGER_BLOG_ID;
+  const geminiApiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_GENAI_API_KEY;
+  const bloggerBlogId = process.env.BLOGGER_BLOG_ID || process.env.TREND_BLOGGER_BLOG_ID;
   const bloggerClientId = process.env.BLOGGER_CLIENT_ID;
   const bloggerClientSecret = process.env.BLOGGER_CLIENT_SECRET;
   const bloggerRefreshToken = process.env.BLOGGER_REFRESH_TOKEN;
@@ -70,7 +70,7 @@ async function runTrendPipeline() {
   const telegramChatId = process.env.TELEGRAM_CHAT_ID;
 
   if (!geminiApiKey) {
-    throw new Error('GEMINI_API_KEY가 설정되지 않았습니다.');
+    throw new Error('GEMINI_API_KEY(또는 GOOGLE_GENAI_API_KEY)가 설정되지 않았습니다. GitHub Secrets를 확인해 주세요.');
   }
 
   // 커스텀 키워드 인자 확인 (--keyword="암백신" 또는 환경변수 CUSTOM_KEYWORD)
