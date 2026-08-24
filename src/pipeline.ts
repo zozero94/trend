@@ -73,6 +73,19 @@ async function runTrendPipeline() {
     throw new Error('GEMINI_API_KEY(또는 GOOGLE_GENAI_API_KEY)가 설정되지 않았습니다. GitHub Secrets를 확인해 주세요.');
   }
 
+  // Blogger 2호점 최근 발행 글 목록 조회 (중복 주제 원천 차단)
+  let recentTitles: string[] = [];
+  if (bloggerBlogId && bloggerClientId && bloggerClientSecret && bloggerRefreshToken) {
+    try {
+      const blogger = new BloggerClient(bloggerBlogId, bloggerClientId, bloggerClientSecret, bloggerRefreshToken);
+      const recentPosts = await blogger.getPosts(30);
+      recentTitles = recentPosts.map((p) => p.title).filter(Boolean);
+      console.log(`📋 [Blogger 2호점 연동] 최근 발행된 글 ${recentTitles.length}건 확인 완료 (중복 방지 목록에 반영)`);
+    } catch (e) {
+      console.warn('⚠️ 최근 포스트 목록 조회 실패 (신규 후보 전체 대상으로 진행):', e);
+    }
+  }
+
   // 커스텀 키워드 인자 확인 (--keyword="암백신" 또는 환경변수 CUSTOM_KEYWORD)
   const keywordArg = process.argv.find((a) => a.startsWith('--keyword='));
   const customKeyword = keywordArg ? keywordArg.split('=')[1].replace(/["']/g, '') : process.env.CUSTOM_KEYWORD;
@@ -82,9 +95,9 @@ async function runTrendPipeline() {
     console.log(`\n🎯 [지정 키워드 모드] 사용자가 지정한 키워드로 분석 진행: "${customKeyword}"`);
     topic = await resolveCustomTopic(geminiApiKey, customKeyword);
   } else {
-    // --- 1단계: 3대 소스 교집합 1등 트렌드 주제 자동 선정 ---
-    console.log('\n[1단계] 실시간 대세 트렌드 키워드 수집 및 교집합 분석...');
-    topic = await selectTopTrendTopic(geminiApiKey);
+    // --- 1단계: 3대 소스 교집합 1등 트렌드 주제 자동 선정 (중복 100% 제외) ---
+    console.log('\n[1단계] 실시간 대세 트렌드 키워드 수집 및 교집합 분석 (기존 글 제외)...');
+    topic = await selectTopTrendTopic(geminiApiKey, recentTitles);
   }
 
   console.log(`🎯 최종 선정 주제: "${topic.keyword}" (${topic.categoryNameKo})`);

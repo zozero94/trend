@@ -112,9 +112,12 @@ export async function fetchNaverAndCommunityTrends(): Promise<TrendRawItem[]> {
 }
 
 /**
- * 4. 3대 소스 교집합 가중치 1등 주제 선별
+ * 4. 3대 소스 교집합 가중치 1등 주제 선별 (최근 발행 글 중복 100% 원천 차단)
  */
-export async function selectTopTrendTopic(apiKey: string): Promise<TrendTopic> {
+export async function selectTopTrendTopic(
+  apiKey: string,
+  alreadyPublishedTitles: string[] = []
+): Promise<TrendTopic> {
   console.log('📡 [트렌드 수집기] 구글 트렌드, 유튜브, 네이버 3대 소스 동시 수집 중...');
   
   const [googleItems, ytItems, naverItems] = await Promise.all([
@@ -123,27 +126,45 @@ export async function selectTopTrendTopic(apiKey: string): Promise<TrendTopic> {
     fetchNaverAndCommunityTrends(),
   ]);
 
-  const allItems = [...googleItems, ...ytItems, ...naverItems];
+  let allItems = [...googleItems, ...ytItems, ...naverItems];
   console.log(`📊 수집 완료: 구글(${googleItems.length}건), 유튜브(${ytItems.length}건), 네이버/바이럴(${naverItems.length}건) -> 총 ${allItems.length}개 후보`);
 
-  const prompt = `당신은 대한민국 최고의 트렌드 큐레이터이자 바이럴 분석가입니다.
-아래는 오늘 실시간으로 수집된 [구글 트렌드], [유튜브 쇼츠/인기영상], [네이버/커뮤니티 바이럴] 데이터입니다.
+  // 1. 최근 발행된 글 목록과 중복되는 키워드 1차 코드 레벨 필터링
+  if (alreadyPublishedTitles.length > 0) {
+    console.log(`🔍 [중복 방지 필터링] 최근 발행된 ${alreadyPublishedTitles.length}개 포스트 제목 대조 중...`);
+    allItems = allItems.filter((item) => {
+      const isDup = alreadyPublishedTitles.some((title) => {
+        const cleanTitle = title.replace(/[^\w가-힣]/g, '').toLowerCase();
+        const cleanKw = item.keyword.replace(/[^\w가-힣]/g, '').toLowerCase();
+        return cleanTitle.includes(cleanKw) || (cleanKw.length >= 3 && cleanTitle.includes(cleanKw.slice(0, 3)));
+      });
+      return !isDup;
+    });
+    console.log(`✅ 중복 제외 후 남은 신규 트렌드 후보: ${allItems.length}개`);
+  }
 
-[수집된 트렌드 후보 풀]
+  const prompt = `당신은 대한민국 최고의 트렌드 큐레이터이자 바이럴 분석가입니다.
+아래는 오늘 실시간으로 수집된 [구글 트렌드], [유튜브 쇼츠/인기영상], [네이버/커뮤니티 바이럴] 신규 후보 데이터입니다.
+
+[수집된 신규 트렌드 후보 풀]
 ${JSON.stringify(allItems.slice(0, 40), null, 2)}
 
+[🚫 절대 중복 금지 목록 - 최근 이미 발행된 포스팅]
+${alreadyPublishedTitles.length > 0 ? alreadyPublishedTitles.slice(0, 20).map((t) => `- ${t}`).join('\n') : '없음'}
+
 [선별 기준]
-1. ★ **교차 교집합 최우선**: 구글, 유튜브, 네이버 중 2개 이상의 소스에서 공통적으로 유행하거나 검색량이 폭발하고 있는 대세 주제 1개를 선정하세요.
-2. **카테고리 분류**: 다음 3가지 중 하나로 명확히 분류하세요:
+1. ★ **신규 대세 주제 필수**: 위 [절대 중복 금지 목록]에 이미 발행된 키워드/소재는 100% 배제하고, 아직 다루지 않은 완전히 새로운 차순위 대세 트렌드 1개를 선정하세요.
+2. ★ **교차 교집합 최우선**: 구글, 유튜브, 네이버 중 2개 이상의 소스에서 공통적으로 유행하거나 검색량이 폭발하고 있는 대세 주제를 고르세요.
+3. **카테고리 분류**: 다음 3가지 중 하나로 명확히 분류하세요:
    - 'HOT_PLACE': 성수/홍대/강남 등 SNS 화제의 맛집, 신상 카페, 팝업스토어, 여행지
    - 'SHOPPING_ITEM': 다이소 대란템, 올리브영 꿀템, 쿠팡 인기템, 신상 전자기기/패션
    - 'MEME_TREND': 릴스/쇼츠 유행어, 밈 챌린지, 화제의 인물/사건 이슈
-3. **후킹 포인트 도출**: 점심시간(12:00) 직장인/학생이 홀린 듯이 클릭할 수밖에 없는 어그로/호기심 자극 포인트 작성.
-4. **검색 쿼리 생성**: 사실 확인(위치, 가격, 구매처, 팩트체크)을 위해 웹에서 검색할 키워드 3~4개 생성.
+4. **후킹 포인트 도출**: 점심시간(12:00) 직장인/학생이 홀린 듯이 클릭할 수밖에 없는 어그로/호기심 자극 포인트 작성.
+5. **검색 쿼리 생성**: 사실 확인(위치, 가격, 구매처, 팩트체크)을 위해 웹에서 검색할 키워드 3~4개 생성.
 
 반드시 다음 JSON 형식으로만 응답하세요:
 {
-  "keyword": "선정된 핵심 키워드",
+  "keyword": "선정된 새로운 핵심 키워드",
   "category": "HOT_PLACE | SHOPPING_ITEM | MEME_TREND",
   "categoryNameKo": "SNS 핫플레이스/맛집 (또는 바이럴 꿀템/쇼핑, 화제의 밈/이슈)",
   "headlineHook": "어그로 후킹 핵심 요약",
@@ -161,14 +182,16 @@ ${JSON.stringify(allItems.slice(0, 40), null, 2)}
     },
   });
 
+  const fallbackCandidate = allItems[0]?.keyword || '실시간 화제의 신상 트렌드';
+
   const parsed = safeJsonParse<TrendTopic>(response.text || '{}', {
-    keyword: 'SNS 화제의 핫플레이스',
+    keyword: fallbackCandidate,
     category: 'HOT_PLACE' as TrendCategory,
     categoryNameKo: 'SNS 핫플레이스/맛집',
-    headlineHook: '줄 서서 먹는다는 성수동 핫플 완벽 분석',
+    headlineHook: `${fallbackCandidate} 솔직 후기 및 완벽 분석`,
     sources: ['google_trends', 'youtube'],
     matchScore: 90,
-    searchQueries: ['성수동 핫플 위치', '성수동 핫플 웨이팅', '성수동 핫플 메뉴'],
+    searchQueries: [`${fallbackCandidate} 위치`, `${fallbackCandidate} 웨이팅`, `${fallbackCandidate} 후기`],
   });
 
   return parsed;
