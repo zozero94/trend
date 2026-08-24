@@ -27,6 +27,8 @@ export interface VerifiedLink {
   pageTitle: string;
   screenshotBase64?: string;
   isContentMatched: boolean;
+  relevanceScore?: number; // 0~100점
+  suggestedCorrection?: string;
   verificationNotes: string;
 }
 

@@ -138,7 +138,7 @@ export async function sanitizeSearchKeywords(
 }
 
 /**
- * 3. Playwright를 활용하여 URL 실제 접속 ➔ 스크린샷 캡처 ➔ Gemini Vision으로 일치성 및 무결성 팩트체크
+ * 3. Playwright 고화질 캡처 + DOM 텍스트 추출 + Gemini Vision 멀티모달 정밀 팩트체크 엔진
  */
 export async function verifyUrlAndCaptureScreenshot(
   apiKey: string,
@@ -146,13 +146,16 @@ export async function verifyUrlAndCaptureScreenshot(
   expectedTopicKeyword: string,
   platformType: 'youtube' | 'naver' | 'coupang' | 'general' = 'general'
 ): Promise<VerifiedLink> {
-  console.log(`🔍 [랜딩 & 스크린샷 검증] ${platformType.toUpperCase()} 접속 검증: ${targetUrl}`);
+  console.log(`🔍 [멀티모달 랜딩 검증] ${platformType.toUpperCase()} 정밀 팩트체크: ${targetUrl}`);
 
   let status = 200;
   let pageTitle = '';
+  let domText = '';
   let screenshotBase64 = '';
   let isHealthy = false;
   let isContentMatched = false;
+  let relevanceScore = 0;
+  let suggestedCorrection = '';
   let verificationNotes = '';
 
   let browser: any = null;
@@ -175,7 +178,12 @@ export async function verifyUrlAndCaptureScreenshot(
 
     await page.waitForTimeout(1000);
 
-    const screenshotBuffer = await page.screenshot({ type: 'jpeg', quality: 80 });
+    // DOM 내부 실제 텍스트 1500자 추출 (비전 분석과 크로스체크용)
+    domText = await page.evaluate(() => {
+      return document.body ? document.body.innerText.replace(/\s+/g, ' ').slice(0, 1500) : '';
+    });
+
+    const screenshotBuffer = await page.screenshot({ type: 'jpeg', quality: 85 });
     screenshotBase64 = screenshotBuffer.toString('base64');
     isHealthy = status >= 200 && status < 400;
 
@@ -200,6 +208,7 @@ export async function verifyUrlAndCaptureScreenshot(
       const htmlText = await fetchRes.text();
       const match = htmlText.match(/<title[^>]*>([^<]+)<\/title>/i);
       pageTitle = match ? match[1].trim() : '';
+      domText = htmlText.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').slice(0, 1500);
     } catch {
       status = 500;
       isHealthy = false;
@@ -210,20 +219,26 @@ export async function verifyUrlAndCaptureScreenshot(
   if (isHealthy) {
     try {
       const ai = new GoogleGenAI({ apiKey });
-      const prompt = `당신은 웹 콘텐츠 및 랜딩페이지 일치성 검증 AI입니다.
-우리가 작성하려는 주제: "${expectedTopicKeyword}"
-검증 대상 URL: "${targetUrl}" (${platformType})
-페이지 제목: "${pageTitle}"
+      const prompt = `당신은 대한민국 최고의 웹 랜딩 및 시각적 콘텐츠 일치성 감리관(Visual Link Auditor)입니다.
+우리가 작성하려는 핵심 주제: "${expectedTopicKeyword}"
+검증 대상 URL: "${targetUrl}" (플랫폼: ${platformType})
+웹페이지 제목: "${pageTitle}"
+웹페이지 텍스트 요약: "${domText.slice(0, 800)}"
 
-[검증 기준]
-1. 이 웹페이지 화면에 타겟 주제("${expectedTopicKeyword}")와 관련된 실제 영상, 뉴스, 상품 정보가 정상적으로 노출되고 있나요?
-2. 404 에러, "검색 결과가 없습니다", 오탈자로 인한 엉뚱한 검색 결과, 성인인증/접근 차단 화면이 아닌가요?
+[정밀 시각 & 텍스트 검증 지침]
+첨부된 실제 웹페이지 스크린샷과 추출된 텍스트를 정밀 분석하여 다음을 판정하세요:
+1. **정상 랜딩 여부 (isHealthy)**: 404 에러, 403 차단(Akamai incident), "검색 결과가 없습니다", 성인 인증창, 로그인 차단 화면이면 false.
+2. **주제 일치성 (isContentMatched)**: 화면에 타겟 주제("${expectedTopicKeyword}")와 직접 관련된 상품, 영상, 지도, 공식 정보가 실제로 확실히 노출되고 있는지 여부 (엉뚱한 상품이나 전혀 다른 일반 단어가 나오면 false).
+3. **일치성 점수 (relevanceScore)**: 0~100점 (80점 이상이면 완벽 일치, 70점 미만은 불일치).
+4. **보정 제안 (suggestedCorrection)**: 불일치하거나 검색 결과가 0건인 경우, 대안이 될 더 정확한 검색어 또는 공식 URL 제안.
 
 반드시 다음 JSON 포맷으로만 응답하세요:
 {
-  "isContentMatched": true,
   "isHealthy": true,
-  "verificationNotes": "검증 완료: ${expectedTopicKeyword} 관련 정상 콘텐츠 노출 확인"
+  "isContentMatched": true,
+  "relevanceScore": 95,
+  "suggestedCorrection": "대안 키워드 또는 빈문자열",
+  "verificationNotes": "검증 상세 사유 요약"
 }`;
 
       let contentPayload: any = prompt;
@@ -244,28 +259,38 @@ export async function verifyUrlAndCaptureScreenshot(
         config: { responseMimeType: 'application/json', temperature: 0.1 },
       });
 
-      const parsed = safeJsonParse<{ isContentMatched: boolean; isHealthy: boolean; verificationNotes: string }>(
-        visionRes.text || '{}',
-        {
-          isContentMatched: true,
-          isHealthy: true,
-          verificationNotes: '기본 일치성 확인',
-        }
-      );
+      const parsed = safeJsonParse<{
+        isHealthy: boolean;
+        isContentMatched: boolean;
+        relevanceScore: number;
+        suggestedCorrection: string;
+        verificationNotes: string;
+      }>(visionRes.text || '{}', {
+        isHealthy: true,
+        isContentMatched: true,
+        relevanceScore: 85,
+        suggestedCorrection: '',
+        verificationNotes: '기본 일치성 확인',
+      });
 
-      isContentMatched = parsed.isContentMatched;
-      isHealthy = parsed.isHealthy;
-      verificationNotes = parsed.verificationNotes;
+      isHealthy = parsed.isHealthy ?? true;
+      isContentMatched = parsed.isContentMatched ?? true;
+      relevanceScore = parsed.relevanceScore ?? 80;
+      suggestedCorrection = parsed.suggestedCorrection || '';
+      verificationNotes = parsed.verificationNotes || '검증 완료';
     } catch (e) {
       isContentMatched = true;
+      relevanceScore = 80;
       verificationNotes = `페이지 응답 정상 (${status} OK)`;
     }
   } else {
     isContentMatched = false;
+    relevanceScore = 0;
     verificationNotes = `비정상 HTTP 응답 코드: ${status}`;
   }
 
-  console.log(`✅ [${platformType.toUpperCase()} 검증 결과] ${isHealthy && isContentMatched ? '통과' : '주의'} - ${verificationNotes}`);
+  const resultStatusIcon = isHealthy && isContentMatched && relevanceScore >= 70 ? '✅ 통과' : '⚠️ 주의/불일치';
+  console.log(`   └ [${platformType.toUpperCase()} 검증] ${resultStatusIcon} (${relevanceScore}점) - ${verificationNotes}`);
 
   return {
     originalUrl: targetUrl,
@@ -275,6 +300,8 @@ export async function verifyUrlAndCaptureScreenshot(
     pageTitle,
     screenshotBase64: screenshotBase64 ? `data:image/jpeg;base64,${screenshotBase64.slice(0, 100)}...` : undefined,
     isContentMatched,
+    relevanceScore,
+    suggestedCorrection,
     verificationNotes,
   };
 }

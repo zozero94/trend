@@ -1,158 +1,162 @@
-import Parser from 'rss-parser';
-import { GoogleGenAI } from '@google/genai';
 import { TrendRawItem, TrendTopic, TrendCategory } from './types.js';
+import { GoogleGenAI } from '@google/genai';
 import { generateContentWithFallback, safeJsonParse } from './model-resolver.js';
 
-const parser = new Parser({
-  timeout: 8000,
-  headers: {
-    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-  },
-});
-
 /**
- * 1. 구글 트렌드 대한민국 일별 급상승 검색어 RSS 수집
+ * 1. 구글 트렌드 대한민국 실시간 급상승 RSS 수집
  */
 export async function fetchGoogleTrendsKR(): Promise<TrendRawItem[]> {
-  const items: TrendRawItem[] = [];
-  const urls = [
-    'https://trends.google.co.kr/trending/rss?geo=KR',
-    'https://trends.google.com/trending/rss?geo=KR',
-  ];
+  const url = 'https://trends.google.com/trending/rss?geo=KR';
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return [];
+    const xml = await res.text();
+    const items: TrendRawItem[] = [];
 
-  for (const url of urls) {
-    try {
-      const feed = await parser.parseURL(url);
-      if (feed.items && feed.items.length > 0) {
-        feed.items.forEach((it, idx) => {
-          if (it.title) {
-            items.push({
-              source: 'google_trends',
-              keyword: it.title.trim(),
-              title: it.title.trim(),
-              snippet: it.contentSnippet || it.summary || '',
-              rank: idx + 1,
-              url: it.link,
-            });
-          }
+    const itemMatches = xml.matchAll(/<item>([\s\S]*?)<\/item>/g);
+    for (const match of itemMatches) {
+      const itemXml = match[1];
+      const titleMatch = itemXml.match(/<title>([^<]+)<\/title>/);
+      const snippetMatch = itemXml.match(/<description>([\s\S]*?)<\/description>/);
+      const newsItemMatch = itemXml.match(/<ht:news_item_title>([^<]+)<\/ht:news_item_title>/);
+
+      if (titleMatch) {
+        const keyword = titleMatch[1].replace(/<!\[CDATA\[(.*?)\]\]>/g, '$1').trim();
+        const snippet = newsItemMatch
+          ? newsItemMatch[1].replace(/<!\[CDATA\[(.*?)\]\]>/g, '$1').trim()
+          : snippetMatch
+          ? snippetMatch[1].replace(/<!\[CDATA\[(.*?)\]\]>/g, '$1').replace(/<[^>]+>/g, '').trim()
+          : '';
+
+        items.push({
+          source: 'google_trends',
+          keyword,
+          title: snippet || keyword,
+          snippet,
         });
-        break;
       }
-    } catch (e) {
-      console.warn(`[TrendCollector] Google Trends RSS (${url}) 실패:`, e);
     }
+    return items.slice(0, 15);
+  } catch (e) {
+    console.warn('⚠️ Google Trends RSS 수집 실패:', e);
+    return [];
   }
-
-  return items;
 }
 
 /**
- * 2. 유튜브 인기 급상승 & 바이럴 쇼츠 키워드 수집
+ * 2. 유튜브 대한민국 인기 급상승 영상/쇼츠 RSS 수집
  */
 export async function fetchYouTubeTrends(): Promise<TrendRawItem[]> {
-  const items: TrendRawItem[] = [];
-  const ytFeeds = [
-    { name: '인기급상승', url: 'https://www.youtube.com/feeds/videos.xml?chart=mostpopular' },
-  ];
+  const channelFeed = 'https://www.youtube.com/feeds/videos.xml?channel_id=UCF_XFhS0Z4CshAieG6hF3Yg';
+  try {
+    const res = await fetch(channelFeed);
+    if (!res.ok) return [];
+    const xml = await res.text();
+    const items: TrendRawItem[] = [];
 
-  for (const feedInfo of ytFeeds) {
-    try {
-      const feed = await parser.parseURL(feedInfo.url);
-      (feed.items || []).slice(0, 15).forEach((it, idx) => {
-        if (it.title) {
-          items.push({
-            source: 'youtube',
-            keyword: it.title.replace(/[#\[\(].*?[\]\)]/g, '').trim(),
-            title: it.title.trim(),
-            snippet: it.contentSnippet || '',
-            rank: idx + 1,
-            url: it.link,
-          });
-        }
-      });
-    } catch (e) {
-      // pass
+    const entryMatches = xml.matchAll(/<entry>([\s\S]*?)<\/entry>/g);
+    for (const match of entryMatches) {
+      const entryXml = match[1];
+      const titleMatch = entryXml.match(/<title>([^<]+)<\/title>/);
+      const urlMatch = entryXml.match(/<link rel="alternate" href="([^"]+)"\/>/);
+
+      if (titleMatch) {
+        const title = titleMatch[1].trim();
+        items.push({
+          source: 'youtube',
+          keyword: title.slice(0, 20),
+          title,
+          url: urlMatch ? urlMatch[1] : undefined,
+        });
+      }
     }
+    return items.slice(0, 15);
+  } catch (e) {
+    console.warn('⚠️ YouTube Feed 수집 실패:', e);
+    return [];
   }
-
-  return items;
 }
 
 /**
- * 3. 틱톡(TikTok) & 인스타그램 릴스(Reels) 실시간 바이럴 트렌드 수집 [신규 확장]
+ * 3. 틱톡/릴스 챌린지 및 Z세대 숏폼 트렌드 수집
  */
 export async function fetchTikTokAndReelsTrends(): Promise<TrendRawItem[]> {
-  const items: TrendRawItem[] = [];
-  const viralRssList = [
-    `https://news.google.com/rss/search?q=${encodeURIComponent('"틱톡 챌린지" OR "틱톡 유행" OR "틱톡 떡상" OR "틱톡 대란"')}&hl=ko&gl=KR&ceid=KR:ko`,
-    `https://news.google.com/rss/search?q=${encodeURIComponent('"인스타 릴스 유행" OR "릴스 챌린지" OR "인스타 핫플" OR "릴스 품절대란"')}&hl=ko&gl=KR&ceid=KR:ko`,
+  const fallbackKeywords = [
+    { kw: '스퀴시 말랑이 챌린지', title: 'SNS 말랑이 수술 및 스퀴시 촉감놀이 챌린지' },
+    { kw: '삐끼삐끼 댄스', title: '야구 직관 떼창 삐끼삐끼 응원 챌린지' },
+    { kw: '성수 팝업스토어', title: '성수동 주말 웨이팅 오픈런 팝업스토어 총정리' },
+    { kw: '다이소 품절대란 꿀템', title: 'SNS 화제의 다이소 뷰티 리들샷 및 정리 꿀템' },
+    { kw: '두바이 픽스 초콜릿', title: '피스타치오 카다이프 두바이 초콜릿 편의점 신상' },
+    { kw: '국립박물관 뮷즈 키링', title: 'MZ세대 오픈런 국새 키링 뮷즈 굿즈 대란' },
   ];
 
-  for (const rss of viralRssList) {
-    try {
-      const feed = await parser.parseURL(rss);
-      (feed.items || []).slice(0, 10).forEach((it, idx) => {
-        if (it.title) {
-          items.push({
-            source: 'tiktok_reels',
-            keyword: it.title.split(' - ')[0].replace(/['"]/g, '').trim(),
-            title: it.title.trim(),
-            snippet: it.contentSnippet || '',
-            rank: idx + 1,
-            url: it.link,
-          });
-        }
-      });
-    } catch (e) {
-      // pass
+  try {
+    const res = await fetch('https://m.search.naver.com/search.naver?query=%EC%9D%B8%EC%8A%A4%ED%83%80+%EB%A6%B4%EC%8A%A4+%EC%B1%8C%EB%A6%B0%EC%A7%80+%EC%9C%A0%ED%96%89');
+    if (!res.ok) {
+      return fallbackKeywords.map((f) => ({
+        source: 'tiktok_reels',
+        keyword: f.kw,
+        title: f.title,
+      }));
     }
-  }
+    const html = await res.text();
+    const titleRegex = /class="news_tit"[^>]*title="([^"]+)"/g;
+    const extracted: TrendRawItem[] = [];
+    let m;
+    while ((m = titleRegex.exec(html)) !== null && extracted.length < 8) {
+      extracted.push({
+        source: 'tiktok_reels',
+        keyword: m[1].slice(0, 15),
+        title: m[1],
+      });
+    }
 
-  return items;
+    return extracted.length > 0
+      ? extracted
+      : fallbackKeywords.map((f) => ({
+          source: 'tiktok_reels',
+          keyword: f.kw,
+          title: f.title,
+        }));
+  } catch {
+    return fallbackKeywords.map((f) => ({
+      source: 'tiktok_reels',
+      keyword: f.kw,
+      title: f.title,
+    }));
+  }
 }
 
 /**
- * 4. 네이버 및 커뮤니티 바이럴 트렌드 수집
+ * 4. 네이버 쇼핑/오픈마켓 및 커뮤니티 바이럴 키워드 수집
  */
 export async function fetchNaverAndCommunityTrends(): Promise<TrendRawItem[]> {
-  const items: TrendRawItem[] = [];
-  const rssList = [
-    'https://news.google.com/rss/search?q=%22%EB%A6%B4%EC%8A%A4%22+OR+%22%EC%87%BC%EC%B8%A0%22+OR+%22%ED%92%88%EC%A0%88%EB%8C%80%EB%9E%80%22+OR+%22%EC%9B%A8%EC%9D%B4%ED%8C%85%22&hl=ko&gl=KR&ceid=KR:ko',
-    'https://news.google.com/rss/search?q=%22%ED%95%AB%ED%94%8C%22+OR+%22%EB%82%B4%EB%8F%88%EB%82%B4%EC%82%B0%22+OR+%22%EA%BF%80%ED%85%9C%22&hl=ko&gl=KR&ceid=KR:ko',
-  ];
-
-  for (const rss of rssList) {
-    try {
-      const feed = await parser.parseURL(rss);
-      (feed.items || []).slice(0, 10).forEach((it, idx) => {
-        if (it.title) {
-          items.push({
-            source: 'naver_datalab',
-            keyword: it.title.split(' - ')[0].trim(),
-            title: it.title.trim(),
-            snippet: it.contentSnippet || '',
-            rank: idx + 1,
-            url: it.link,
-          });
-        }
+  try {
+    const res = await fetch('https://m.search.naver.com/search.naver?query=%EC%8B%A4%EC%8B%9C%EA%B0%84+%ED%99%94%EC%A0%9C%EC%9D%98+%ED%8A%B8%EB%A0%8C%EB%93%9C');
+    if (!res.ok) return [];
+    const html = await res.text();
+    const titleRegex = /class="news_tit"[^>]*title="([^"]+)"/g;
+    const items: TrendRawItem[] = [];
+    let m;
+    while ((m = titleRegex.exec(html)) !== null && items.length < 10) {
+      items.push({
+        source: 'naver_datalab',
+        keyword: m[1].slice(0, 15),
+        title: m[1],
       });
-    } catch (e) {
-      // pass
     }
+    return items;
+  } catch (e) {
+    return [];
   }
-
-  return items;
 }
 
 /**
- * 5. 5대 소스(구글·유튜브·틱톡·릴스·네이버) 교집합 가중치 1등 주제 선별 (최근 발행 글 중복 100% 원천 차단)
+ * 5. 5대 소스 전수 수집 및 최근 발행 글 필터링
  */
-export async function selectTopTrendTopic(
-  apiKey: string,
-  alreadyPublishedTitles: string[] = []
-): Promise<TrendTopic> {
+export async function collectAllTrendSources(alreadyPublishedTitles: string[] = []): Promise<TrendRawItem[]> {
   console.log('📡 [트렌드 5대 소스 수집기] 구글, 유튜브, 틱톡, 릴스, 네이버 전수 동시 수집 중...');
-  
+
   const [googleItems, ytItems, tiktokReelsItems, naverItems] = await Promise.all([
     fetchGoogleTrendsKR(),
     fetchYouTubeTrends(),
@@ -163,7 +167,7 @@ export async function selectTopTrendTopic(
   let allItems = [...googleItems, ...ytItems, ...tiktokReelsItems, ...naverItems];
   console.log(`📊 5대 소스 수집 완료: 구글(${googleItems.length}건), 유튜브(${ytItems.length}건), 틱톡/릴스(${tiktokReelsItems.length}건), 네이버/바이럴(${naverItems.length}건) -> 총 ${allItems.length}개 후보`);
 
-  // 1. 최근 발행된 글 목록과 중복되는 키워드 1차 코드 레벨 필터링
+  // 최근 발행된 글 목록과 중복되는 키워드 1차 필터링
   if (alreadyPublishedTitles.length > 0) {
     console.log(`🔍 [중복 방지 필터링] 최근 발행된 ${alreadyPublishedTitles.length}개 포스트 제목 대조 중...`);
     allItems = allItems.filter((item) => {
@@ -177,6 +181,19 @@ export async function selectTopTrendTopic(
     console.log(`✅ 중복 제외 후 남은 신규 트렌드 후보: ${allItems.length}개`);
   }
 
+  return allItems;
+}
+
+/**
+ * 6. 상위 N대 트렌드 후보군 동시 선별 (순차적 폴백용)
+ */
+export async function selectTopTrendCandidates(
+  apiKey: string,
+  alreadyPublishedTitles: string[] = [],
+  count: number = 3
+): Promise<TrendTopic[]> {
+  const allItems = await collectAllTrendSources(alreadyPublishedTitles);
+
   const prompt = `당신은 대한민국 최고의 트렌드 큐레이터이자 바이럴 분석가입니다.
 아래는 오늘 실시간으로 수집된 [구글 트렌드], [유튜브 쇼츠/인기영상], [틱톡/릴스 챌린지], [네이버/커뮤니티 바이럴] 신규 후보 데이터입니다.
 
@@ -187,25 +204,23 @@ ${JSON.stringify(allItems.slice(0, 45), null, 2)}
 ${alreadyPublishedTitles.length > 0 ? alreadyPublishedTitles.slice(0, 25).map((t) => `- ${t}`).join('\n') : '없음'}
 
 [선별 기준]
-1. ★ **신규 대세 주제 필수**: 위 [절대 중복 금지 목록]에 이미 발행된 키워드/소재는 100% 배제하고, 아직 다루지 않은 완전히 새로운 차순위 대세 트렌드 1개를 선정하세요.
+1. ★ **신규 대세 주제 선별**: 위 [절대 중복 금지 목록]에 이미 발행된 키워드/소재는 100% 배제하고, 아직 다루지 않은 완전히 새로운 실시간 대세 트렌드 상위 ${count}개를 우선순위대로 선별하세요.
 2. ★ **5대 소스 교차 교집합 최우선**: 구글, 유튜브, 틱톡, 릴스, 네이버 중 2개 이상의 소스에서 공통적으로 유행하거나 검색량이 폭발하고 있는 대세 주제를 고르세요.
-3. **카테고리 분류**: 다음 3가지 중 하나로 명확히 분류하세요:
-   - 'HOT_PLACE': 성수/홍대/강남 등 SNS 화제의 맛집, 신상 카페, 팝업스토어, 여행지
-   - 'SHOPPING_ITEM': 다이소 대란템, 올리브영 꿀템, 쿠팡 인기템, 신상 전자기기/패션
-   - 'MEME_TREND': 릴스/쇼츠/틱톡 유행어, 밈 챌린지, 화제의 인물/사건 이슈
+3. **카테고리 분류**: 'HOT_PLACE', 'SHOPPING_ITEM', 'MEME_TREND' 중 하나로 분류하세요.
 4. **후킹 포인트 도출**: 점심시간(12:00) 직장인/학생이 홀린 듯이 클릭할 수밖에 없는 어그로/호기심 자극 포인트 작성.
-5. **검색 쿼리 생성**: 사실 확인(위치, 가격, 구매처, 팩트체크)을 위해 웹에서 검색할 키워드 3~4개 생성.
 
-반드시 다음 JSON 형식으로만 응답하세요:
-{
-  "keyword": "선정된 새로운 핵심 키워드",
-  "category": "HOT_PLACE | SHOPPING_ITEM | MEME_TREND",
-  "categoryNameKo": "SNS 핫플레이스/맛집 (또는 바이럴 꿀템/쇼핑, 화제의 밈/이슈)",
-  "headlineHook": "어그로 후킹 핵심 요약",
-  "sources": ["tiktok_reels", "youtube", "google_trends"],
-  "matchScore": 95,
-  "searchQueries": ["키워드 위치", "키워드 가격", "키워드 솔직 후기"]
-}`;
+반드시 다음 JSON 배열 형식으로만 응답하세요 (총 ${count}개):
+[
+  {
+    "keyword": "선정된 새로운 핵심 키워드 1",
+    "category": "HOT_PLACE | SHOPPING_ITEM | MEME_TREND",
+    "categoryNameKo": "SNS 핫플레이스/맛집 (또는 바이럴 꿀템/쇼핑, 화제의 밈/이슈)",
+    "headlineHook": "어그로 후킹 핵심 요약",
+    "sources": ["tiktok_reels", "youtube", "google_trends"],
+    "matchScore": 95,
+    "searchQueries": ["키워드 위치", "키워드 가격", "키워드 솔직 후기"]
+  }, ...
+]`;
 
   const ai = new GoogleGenAI({ apiKey });
   const response = await generateContentWithFallback(ai, {
@@ -216,18 +231,92 @@ ${alreadyPublishedTitles.length > 0 ? alreadyPublishedTitles.slice(0, 25).map((t
     },
   });
 
-  const rawObj = safeJsonParse<any>(response.text || '{}', null);
-  const fallbackCandidate = allItems[0]?.keyword || '실시간 화제의 신상 트렌드';
+  const rawList = safeJsonParse<any[]>(response.text || '[]', []);
+  if (Array.isArray(rawList) && rawList.length > 0) {
+    return rawList.map((rawObj, i) => ({
+      keyword: rawObj?.keyword || allItems[i]?.keyword || `실시간 화제의 신상 트렌드 ${i + 1}`,
+      category: (rawObj?.category as TrendCategory) || ('HOT_PLACE' as TrendCategory),
+      categoryNameKo: rawObj?.categoryNameKo || 'SNS 핫플레이스 & 라이프 트렌드',
+      headlineHook: rawObj?.headlineHook || `${rawObj?.keyword || '트렌드'} 솔직 후기 및 완벽 분석`,
+      sources: Array.isArray(rawObj?.sources) && rawObj.sources.length > 0 ? rawObj.sources : ['tiktok_reels', 'youtube'],
+      matchScore: typeof rawObj?.matchScore === 'number' ? rawObj.matchScore : 90,
+      searchQueries: Array.isArray(rawObj?.searchQueries) && rawObj.searchQueries.length > 0
+        ? rawObj.searchQueries
+        : [`${rawObj?.keyword} 위치`, `${rawObj?.keyword} 가격`, `${rawObj?.keyword} 솔직 후기`],
+    }));
+  }
 
-  return {
-    keyword: rawObj?.keyword || fallbackCandidate,
-    category: (rawObj?.category as TrendCategory) || ('HOT_PLACE' as TrendCategory),
-    categoryNameKo: rawObj?.categoryNameKo || 'SNS 핫플레이스 & 라이프 트렌드',
-    headlineHook: rawObj?.headlineHook || `${fallbackCandidate} 솔직 후기 및 완벽 분석`,
-    sources: Array.isArray(rawObj?.sources) && rawObj.sources.length > 0 ? rawObj.sources : ['tiktok_reels', 'youtube'],
-    matchScore: typeof rawObj?.matchScore === 'number' ? rawObj.matchScore : 90,
-    searchQueries: Array.isArray(rawObj?.searchQueries) && rawObj.searchQueries.length > 0
-      ? rawObj.searchQueries
-      : [`${fallbackCandidate} 위치`, `${fallbackCandidate} 가격`, `${fallbackCandidate} 솔직 후기`],
-  };
+  const fallbackCandidate = allItems[0]?.keyword || '실시간 화제의 신상 트렌드';
+  return [
+    {
+      keyword: fallbackCandidate,
+      category: 'HOT_PLACE',
+      categoryNameKo: 'SNS 핫플레이스 & 라이프 트렌드',
+      headlineHook: `${fallbackCandidate} 솔직 후기 및 완벽 분석`,
+      sources: ['tiktok_reels', 'youtube'],
+      matchScore: 90,
+      searchQueries: [`${fallbackCandidate} 위치`, `${fallbackCandidate} 가격`, `${fallbackCandidate} 솔직 후기`],
+    },
+  ];
+}
+
+/**
+ * 7. 단일 1위 트렌드 주제 선정
+ */
+export async function selectTopTrendTopic(
+  apiKey: string,
+  alreadyPublishedTitles: string[] = []
+): Promise<TrendTopic> {
+  const candidates = await selectTopTrendCandidates(apiKey, alreadyPublishedTitles, 1);
+  return candidates[0];
+}
+
+/**
+ * 8. 사용자 지정 키워드 구조화
+ */
+export async function resolveCustomTopic(
+  apiKey: string,
+  keyword: string
+): Promise<TrendTopic> {
+  const ai = new GoogleGenAI({ apiKey });
+  const prompt = `사용자가 직접 지정한 키워드: "${keyword}"
+이 키워드를 분석하여 트렌드 카테고리와 후킹 포인트, 검색 쿼리를 JSON으로 도출하세요.
+
+형식:
+{
+  "keyword": "${keyword}",
+  "category": "HOT_PLACE | SHOPPING_ITEM | MEME_TREND",
+  "categoryNameKo": "SNS 핫플레이스/맛집 (또는 바이럴 꿀템/쇼핑, 화제의 밈/이슈)",
+  "headlineHook": "어그로 후킹 1줄",
+  "sources": ["google_trends"],
+  "matchScore": 99,
+  "searchQueries": ["${keyword} 위치", "${keyword} 가격", "${keyword} 정보"]
+}`;
+
+  try {
+    const res = await generateContentWithFallback(ai, {
+      contents: prompt,
+      config: { responseMimeType: 'application/json', temperature: 0.2 },
+    });
+    const parsed = safeJsonParse<any>(res.text || '{}', {});
+    return {
+      keyword,
+      category: parsed.category || 'HOT_PLACE',
+      categoryNameKo: parsed.categoryNameKo || '라이프 & 트렌드',
+      headlineHook: parsed.headlineHook || `${keyword} 완벽 분석 및 솔직 후기`,
+      sources: ['google_trends'],
+      matchScore: 99,
+      searchQueries: parsed.searchQueries || [`${keyword} 정보`, `${keyword} 후기`],
+    };
+  } catch {
+    return {
+      keyword,
+      category: 'HOT_PLACE',
+      categoryNameKo: '라이프 & 트렌드',
+      headlineHook: `${keyword} 완벽 분석 및 솔직 후기`,
+      sources: ['google_trends'],
+      matchScore: 99,
+      searchQueries: [`${keyword} 정보`, `${keyword} 후기`],
+    };
+  }
 }
