@@ -226,11 +226,12 @@ export function auditAndFixHtmlLinks(
   fixedHtml = fixedHtml.replace(/<div[^>]*>[\s\S]*?단톡방 공유용 카톡 템플릿[\s\S]*?<\/div>/gi, '');
   fixedHtml = fixedHtml.replace(/<div[^>]*>[\s\S]*?친구에게 공유하고 약속 잡기[\s\S]*?<\/div>/gi, '');
 
-  // 2. 텍스트 이미지 플레이스홀더 / 빈 회색 박스 100% 완전 삭제 (불필요한 빈공간 원천 차단)
-  fixedHtml = fixedHtml.replace(/<!--[\s\S]*?이미지[\s\S]*?-->/gi, '');
-  fixedHtml = fixedHtml.replace(/<div[^>]*>[\s\S]*?(📸|\[이미지:|Alt:|이미지 가이드|포토존)[\s\S]*?<\/div>/gi, '');
+  // 2. 텍스트 이미지 플레이스홀더 / 빈 회색 박스 / 대괄호 사진 안내문 100% 완전 삭제
+  fixedHtml = fixedHtml.replace(/<!--[\s\S]*?-->/gi, '');
+  fixedHtml = fixedHtml.replace(/\[[^\]]*(사진|이미지|영역|포토존|가이드|비주얼)[^\]]*\]/gi, '');
+  fixedHtml = fixedHtml.replace(/<div[^>]*>[\s\S]*?(📸|\[이미지:|Alt:|이미지 가이드|포토존|사진 영역)[\s\S]*?<\/div>/gi, '');
   fixedHtml = fixedHtml.replace(/📸\s*\[이미지:[^\]]*\]/gi, '');
-  fixedHtml = fixedHtml.replace(/<p[^>]*>[\s\S]*?📸[\s\S]*?<\/p>/gi, '');
+  fixedHtml = fixedHtml.replace(/<p[^>]*>[\s\S]*?(📸|사진 영역|이미지 영역)[\s\S]*?<\/p>/gi, '');
 
   // 3. 잘못된 네이버 지도 링크 ➔ 정확한 장소 검색 네이버 지도 URL로 교정
   fixedHtml = fixedHtml.replace(/href=['"]https:\/\/map\.naver\.com\/?['"]/g, `href="${validUrls.naverMap}"`);
