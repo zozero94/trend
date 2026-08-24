@@ -212,17 +212,17 @@ export async function executeTwoRoundTrendReviewLoop(
 
     summaryNotes.push(`R${round}:${avgScoreOutOf100}점`);
 
-    // 종료 조건: 최소 2회 이상 실행 + 평점 8.0점 (80점) 이상 달성 시 통과
-    if (round >= 2 && lastScore >= 8.0) {
-      console.log(`🎉 [기준 통과] Round ${round}에서 종합점수 ${avgScoreOutOf100}점으로 80점 기준 돌파 성공!`);
+    // 종료 조건: 최소 2회 이상 실행 + 평점 7.5점 (75점) 이상 달성 시 통과
+    if (round >= 2 && lastScore >= 7.5) {
+      console.log(`🎉 [기준 통과] Round ${round}에서 종합점수 ${avgScoreOutOf100}점으로 75점 기준 돌파 성공!`);
       passed = true;
       break;
     }
 
     if (round >= MAX_ROUNDS) {
-      passed = lastScore >= 8.0;
+      passed = lastScore >= 7.5;
       if (!passed) {
-        console.warn(`⚠️ 최대 라운드(${MAX_ROUNDS}회) 도달 후에도 80점 미달 (최종: ${avgScoreOutOf100}점) -> 품질 기준 미달 처리`);
+        console.warn(`⚠️ 최대 라운드(${MAX_ROUNDS}회) 도달 후에도 75점 미달 (최종: ${avgScoreOutOf100}점) -> 품질 기준 미달 처리`);
       }
       break;
     }

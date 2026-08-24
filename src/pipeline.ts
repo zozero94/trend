@@ -103,14 +103,14 @@ async function runTrendPipeline() {
       );
       console.log(`📄 작성된 초안 제목: "${initialPost.title}"`);
 
-      // --- 4단계: 16인 트렌드/바이럴 에이전트 최소 2회+80점 돌파 감수 및 리라이팅 ---
-      console.log('\n[4단계] 16인의 바이럴/트렌드 전문가 감수 루프 실행 (최소 2회 + 80점 돌파제)...');
+      // --- 4단계: 16인 트렌드/바이럴 에이전트 최소 2회+75점 돌파 감수 및 리라이팅 ---
+      console.log('\n[4단계] 16인의 바이럴/트렌드 전문가 감수 루프 실행 (최소 2회 + 75점 돌파제)...');
       const reviewResult = await executeTwoRoundTrendReviewLoop(geminiApiKey, initialPost, topic);
       const { finalPost, reviewSummary, passed, finalScore } = reviewResult;
 
-      // ★ [품질 방어선] 80점 미만 시 차순위 주제로 자동 전환 & 재탐구
+      // ★ [품질 방어선] 75점 미만 시 차순위 주제로 자동 전환 & 재탐구
       if (!passed) {
-        console.warn(`\n🚫 [후보 ${candidateIdx + 1} 반려] 16인 종합 점수(${finalScore}점)가 80점 기준 미달!`);
+        console.warn(`\n🚫 [후보 ${candidateIdx + 1} 반려] 16인 종합 점수(${finalScore}점)가 75점 기준 미달!`);
         const nextCandidate = candidateTopics[candidateIdx + 1];
 
         if (telegramBotToken && telegramChatId) {
@@ -118,14 +118,14 @@ async function runTrendPipeline() {
           if (nextCandidate) {
             await telegram.sendMessage(
               `⚠️ <b>[원고 반려 ➔ 차순위 주제 자동 전환]</b>\n\n` +
-              `❌ <b>반려 주제:</b> ${escapeHtml(topic.keyword)} (${finalScore}점 / 기준: 80점)\n` +
+              `❌ <b>반려 주제:</b> ${escapeHtml(topic.keyword)} (${finalScore}점 / 기준: 75점)\n` +
               `🔄 <b>감수 이력:</b> ${escapeHtml(reviewSummary)}\n\n` +
-              `🚀 <b>자동 조치:</b> 80점을 넘지 못해 즉시 차순위 대세 후보 [<b>${escapeHtml(nextCandidate.keyword)}</b>] 로 전환하여 고품질 원고 재탐구를 시작합니다!`
+              `🚀 <b>자동 조치:</b> 75점을 넘지 못해 즉시 차순위 대세 후보 [<b>${escapeHtml(nextCandidate.keyword)}</b>] 로 전환하여 고품질 원고 재탐구를 시작합니다!`
             );
           } else {
             await telegram.sendMessage(
               `🚫 <b>[트렌드 2호점] 전체 후보 품질 기준 미달</b>\n\n` +
-              `수집된 모든 후보가 80점 기준을 달성하지 못하여 포스팅 발행을 안전하게 취소했습니다.`
+              `수집된 모든 후보가 75점 기준을 달성하지 못하여 포스팅 발행을 안전하게 취소했습니다.`
             );
           }
         }

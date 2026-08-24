@@ -36,20 +36,35 @@ export async function generateInitialTrendPost(
 2. **모바일 3초 스크롤 가독성 (HTML 스타일)**:
    - 문단은 2~3문장 단위로 짧게 분리.
    - 핵심 단어는 <strong> 태그로 강조.
-   - 도입부에 부드러운 파스텔톤의 3줄 핵심 요약 콜아웃 박스 필수 배치.
-3. **카테고리별 특화 필수 구성**:
+   - 도입부에 부드러운 파스텔톤의 3줄 핵심 요약 콜아웃 박스 필수 배치:
+     <div style="background: #f8fafc; border-left: 4px solid #3b82f6; padding: 16px 18px; border-radius: 8px; margin-bottom: 24px; line-height: 1.7;">
+       <strong style="color: #1e40af; font-size: 15px;">⚡ 3줄 핵심 요약</strong>
+       <ul style="margin: 8px 0 0 0; padding-left: 18px; font-size: 14.5px; color: #1e293b;">...</ul>
+     </div>
+3. **🏛️ 공식 판매처 / 예약처 / 오피셜 직통 배너 (필수 삽입)**:
+   - 본문 상단에 독자가 바로 예약/구매/공지 확인을 할 수 있는 공식 직통 카드를 삽입하세요:
+     <div style="background: #f1f5f9; border: 1.5px solid #cbd5e1; border-radius: 10px; padding: 14px 18px; margin: 20px 0; display: flex; align-items: center; justify-content: space-between;">
+       <div>
+         <strong style="color: #0f172a; font-size: 14px;">🏛️ 공식 오피셜 바로가기</strong>
+         <p style="margin: 3px 0 0 0; font-size: 12.5px; color: #64748b;">공식몰, 예약 사이트 및 상세 공지를 바로 확인하세요.</p>
+       </div>
+       <a href="https://m.search.naver.com/search.naver?query=${encodeURIComponent(topic.keyword)}" target="_blank" rel="noreferrer noopener" referrerpolicy="no-referrer" style="display: inline-block; background: #0f172a; color: #ffffff !important; padding: 8px 14px; border-radius: 6px; font-size: 13px; font-weight: 700; text-decoration: none; white-space: nowrap;">공식 바로가기 &rarr;</a>
+     </div>
+4. **★ 내돈내산 솔직 단점 & 아쉬운 점 (1문단 필수 작성)**:
+   - 무조건적인 찬양글은 절대 금지! 실제 구매자/방문자의 솔직한 호불호, 웨이팅 고충, 아쉬운 가성비나 단점을 1문단 이상 명확히 분석하세요.
+5. **카테고리별 특화 필수 구성**:
    - **HOT_PLACE (맛집/핫플)**:
      - 도로명 주소, 네이버 지도 검색 바로가기 링크(https://m.map.naver.com/search2/search.naver?query=[장소명]), 영업시간, 주차 팁, 대표 메뉴 가격표(Table), 웨이팅 피하는 시간대, 솔직한 호불호 평가.
    - **SHOPPING_ITEM (바이럴 꿀템/쇼핑)**:
      - 제품 스펙/가격표, 바이럴 이유, ★솔직한 단점 및 아쉬운 점, 강력 추천 대상 vs 비추천 대상, 모바일 쿠팡 파트너스 CTA 배너.
    - **MEME_TREND (화제의 밈/이슈)**:
      - 밈의 원본 출처 및 유래, 정확한 뜻과 맥락, 상황별 찰진 사용 예시, 패러디 반응.
-4. **구글 검색 1페이지 상단 노출용 FAQ 3문 3답**:
+6. **구글 검색 1페이지 상단 노출용 FAQ 3문 3답**:
    - 본문 하단에 독자들이 검색창에 직접 쳐볼 법한 핵심 질문 3선(Q&A)을 반드시 배치하세요.
-5. **🚫 절대 금지 항목 (엄격 준수)**:
+7. **🚫 절대 금지 항목 (엄격 준수)**:
    - 텍스트 형태의 '📸 [이미지: ...]', '사진 가이드', 회색 빈 박스 등 모든 종류의 이미지 플레이스홀더 작성 절대 금지!
    - '단톡방 공유용 카톡 템플릿' 같은 가짜 공유 박스 작성 절대 금지.
-6. **쿠팡 파트너스 CTA 배너 (${topic.category === 'SHOPPING_ITEM' ? '필수 포함' : '해당시 포함'})**:
+8. **쿠팡 파트너스 CTA 배너 (${topic.category === 'SHOPPING_ITEM' ? '필수 포함' : '해당시 포함'})**:
    - 쇼핑/아이템 연관 주제인 경우 본문 하단에 반드시 세련된 CTA 버튼과 공정위 필수 문구를 삽입하세요:
    \`<div style="margin: 32px 0; padding: 24px; background: #fff5f5; border-radius: 12px; border: 1px solid #ffd8d8; text-align: center;"><a href="${coupangSearchUrl}" target="_blank" rel="noreferrer noopener" referrerpolicy="no-referrer" style="display: inline-block; padding: 14px 28px; background: #e60012; color: #ffffff !important; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; box-shadow: 0 4px 12px rgba(230,0,18,0.25);">🔥 [${topic.keyword}] 최저가 & 실시간 재고 확인하기 &rarr;</a><p style="font-size: 11px; color: #888888; margin-top: 12px; margin-bottom: 0;">이 포스팅은 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다. (추천인: ${coupangPartnersId})</p></div>\`
 
