@@ -224,8 +224,83 @@ export async function executeTwoRoundTrendReviewLoop(
     round++;
   }
 
+  // =========================================================================
+  // ★ [메인 총괄 에이전트] 총괄 편집국장 최종 마스터 검수 및 발행 승인 단계
+  // =========================================================================
+  console.log('\n👑 [메인 총괄 에이전트] 총괄 수석 에디터(편집국장) 최종 마스터 검수 진행 중...');
+  const masterPost = await executeChiefEditorFinalInspection(apiKey, currentPost, topic, summaryNotes.join(' -> '));
+  console.log(`🎖️ [최종 마스터 승인 완료] 수석 편집국장 발행 승인 도장 날인: "${masterPost.title}"`);
+
   return {
-    finalPost: currentPost,
+    finalPost: masterPost,
     reviewSummary: summaryNotes.join(' ➔ '),
   };
+}
+
+/**
+ * 메인 총괄 에이전트 (총괄 수석 에디터 / 편집국장) 최종 마스터 검수 & 폴리싱
+ */
+export async function executeChiefEditorFinalInspection(
+  apiKey: string,
+  post: TrendPost,
+  topic: TrendTopic,
+  reviewHistory: string
+): Promise<TrendPost> {
+  const ai = new GoogleGenAI({ apiKey });
+
+  const systemInstruction = `당신은 대한민국 최고 권위의 트렌드/미디어 매거진 총괄 편집국장(Editor-in-Chief Main Agent)입니다.
+15인의 전문 감수 위원회가 엄격한 심사를 거쳐 올린 원고를 마지막으로 총괄 검수하고, 독자에게 최상의 경험을 선사할 수 있도록 최종 '마스터 터치(Master Touch)'를 수행하세요.
+
+[편집국장 최종 검수 체크리스트]
+1. **문맥 리듬감 & 톤앤매너 완결성**: 15인의 개별 수정 사항들이 이질감 없이 하나의 유려한 글처럼 매끄럽게 연결되었는가?
+2. **후킹 & 신뢰성의 황금 밸런스**: 자극적인 클릭 유도(어그로)와 실질적인 팩트(내돈내산 단점/가격/정보)가 5:5로 완벽한 균형을 이루는가?
+3. **군더더기 및 번역투 최종 소제**: 지루한 서론이나 중복되는 수식어를 걷어내고 3초 만에 몰입되도록 정제.
+4. **HTML 무결성 & 비주얼 완성도**: 모바일 가독성을 저해하는 요소가 전혀 없는지 확인 후 최종 발행 승인.
+
+[출력 형식]
+반드시 다음 JSON 포맷으로만 응답하세요:
+{
+  "title": "편집국장이 최종 확정한 마스터 헤드라인",
+  "summary": "3줄 핵심 요약",
+  "metaDescription": "검색 최적화 메타 설명",
+  "tags": ["태그1", "태그2", "태그3", "태그4", "태그5"],
+  "htmlContent": "<p>완성된 최종 마스터 HTML 본문...</p>"
+}`;
+
+  const prompt = `[검수 이력]: ${reviewHistory}
+[주제 키워드]: ${topic.keyword} (${topic.categoryNameKo})
+[15인 감수 통과 원고 제목]: ${post.title}
+
+[본문]:
+${post.htmlContent}
+
+위 원고를 총괄 편집국장 관점에서 최종 마스터 검수 및 완성본으로 승인해 주세요.`;
+
+  try {
+    const response = await generateContentWithFallback(ai, {
+      contents: prompt,
+      config: {
+        systemInstruction,
+        responseMimeType: 'application/json',
+        temperature: 0.5,
+        maxOutputTokens: 8192,
+      },
+    });
+
+    const parsed = safeJsonParse<any>(response.text || '{}', {});
+
+    return {
+      title: parsed.title || post.title,
+      summary: parsed.summary || post.summary,
+      metaDescription: parsed.metaDescription || post.metaDescription,
+      category: post.category,
+      categoryNameKo: post.categoryNameKo,
+      tags: parsed.tags || post.tags,
+      htmlContent: parsed.htmlContent || post.htmlContent,
+      verifiedLinks: post.verifiedLinks,
+      coupangUrl: post.coupangUrl,
+    };
+  } catch (e) {
+    return post;
+  }
 }
