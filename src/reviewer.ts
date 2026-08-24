@@ -225,15 +225,33 @@ export async function executeTwoRoundTrendReviewLoop(
   }
 
   // =========================================================================
+  // ★ [4.8단계: 5인의 개발/아키텍처 집중형 엔지니어링 감사]
+  // =========================================================================
+  console.log('\n💻 [4.8단계] 5인의 개발/아키텍처 집중형 엔지니어링 에이전트 시스템 감사 가동...');
+  const { auditEngineeringAndArchitecture } = await import('./system-auditor.js');
+  const devAudit = auditEngineeringAndArchitecture(currentPost, topic);
+  currentPost.htmlContent = devAudit.sanitizedHtml;
+  console.log(`🛠️ 개발/아키텍처 종합 평점: ${devAudit.averageDevScore} / 10점 (${devAudit.overallPassed ? '전원 통과' : '경미한 수정'})`);
+  devAudit.feedbacks.forEach((f) => {
+    console.log(`   - [${f.agentName}] (${f.score}점): ${f.recommendations.join(', ')}`);
+  });
+
+  // =========================================================================
   // ★ [메인 총괄 에이전트] 총괄 편집국장 최종 마스터 검수 및 발행 승인 단계
   // =========================================================================
-  console.log('\n👑 [메인 총괄 에이전트] 총괄 수석 에디터(편집국장) 최종 마스터 검수 진행 중...');
-  const masterPost = await executeChiefEditorFinalInspection(apiKey, currentPost, topic, summaryNotes.join(' -> '));
+  console.log('\n👑 [메인 총괄 에이전트] 총괄 수석 에디터(편집국장) 최종 마스터 검수 및 수정 진행 중...');
+  const masterPost = await executeChiefEditorFinalInspection(
+    apiKey,
+    currentPost,
+    topic,
+    summaryNotes.join(' -> '),
+    devAudit.technicalIssuesSummary
+  );
   console.log(`🎖️ [최종 마스터 승인 완료] 수석 편집국장 발행 승인 도장 날인: "${masterPost.title}"`);
 
   return {
     finalPost: masterPost,
-    reviewSummary: summaryNotes.join(' ➔ '),
+    reviewSummary: `${summaryNotes.join(' ➔ ')} | Dev평점: ${devAudit.averageDevScore}점`,
   };
 }
 
@@ -244,18 +262,19 @@ export async function executeChiefEditorFinalInspection(
   apiKey: string,
   post: TrendPost,
   topic: TrendTopic,
-  reviewHistory: string
+  reviewHistory: string,
+  devIssuesSummary: string = ''
 ): Promise<TrendPost> {
   const ai = new GoogleGenAI({ apiKey });
 
   const systemInstruction = `당신은 대한민국 최고 권위의 트렌드/미디어 매거진 총괄 편집국장(Editor-in-Chief Main Agent)입니다.
-15인의 전문 감수 위원회가 엄격한 심사를 거쳐 올린 원고를 마지막으로 총괄 검수하고, 독자에게 최상의 경험을 선사할 수 있도록 최종 '마스터 터치(Master Touch)'를 수행하세요.
+15인의 콘텐츠 전문 감수 위원회와 5인의 개발/아키텍처 엔지니어링 에이전트가 올린 종합 평가 결과를 토대로, 최종 원고를 직접 판단하고 완성도 100%의 최종 마스터본으로 승인 및 리라이팅하세요.
 
-[편집국장 최종 검수 체크리스트]
+[편집국장 최종 마스터 검수 체크리스트]
 1. **문맥 리듬감 & 톤앤매너 완결성**: 15인의 개별 수정 사항들이 이질감 없이 하나의 유려한 글처럼 매끄럽게 연결되었는가?
 2. **후킹 & 신뢰성의 황금 밸런스**: 자극적인 클릭 유도(어그로)와 실질적인 팩트(내돈내산 단점/가격/정보)가 5:5로 완벽한 균형을 이루는가?
-3. **군더더기 및 번역투 최종 소제**: 지루한 서론이나 중복되는 수식어를 걷어내고 3초 만에 몰입되도록 정제.
-4. **HTML 무결성 & 비주얼 완성도**: 모바일 가독성을 저해하는 요소가 전혀 없는지 확인 후 최종 발행 승인.
+3. **개발/아키텍처 무결성 최종 반영**: 5인의 엔지니어링 에이전트가 지적한 기술적 이슈(DOM 닫는 태그, 보안 속성, XSS 방지)를 완벽히 해결했는가?
+4. **군더더기 및 번역투 최종 소제**: 지루한 서론이나 중복되는 수식어를 걷어내고 3초 만에 몰입되도록 정제.
 
 [출력 형식]
 반드시 다음 JSON 포맷으로만 응답하세요:
@@ -267,14 +286,15 @@ export async function executeChiefEditorFinalInspection(
   "htmlContent": "<p>완성된 최종 마스터 HTML 본문...</p>"
 }`;
 
-  const prompt = `[검수 이력]: ${reviewHistory}
+  const prompt = `[15인 콘텐츠 감수 이력]: ${reviewHistory}
+[5인 개발/아키텍처 감사 보고]: ${devIssuesSummary || '기술적 이슈 없음 (전원 합격)'}
 [주제 키워드]: ${topic.keyword} (${topic.categoryNameKo})
-[15인 감수 통과 원고 제목]: ${post.title}
+[감수 통과 원고 제목]: ${post.title}
 
 [본문]:
 ${post.htmlContent}
 
-위 원고를 총괄 편집국장 관점에서 최종 마스터 검수 및 완성본으로 승인해 주세요.`;
+위 원고를 총괄 편집국장 관점에서 기술적/문맥적 결함을 최종 판단하여 완벽한 마스터본으로 승인해 주세요.`;
 
   try {
     const response = await generateContentWithFallback(ai, {
