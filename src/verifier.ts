@@ -51,7 +51,7 @@ export async function sanitizeSearchKeywords(
       exactProductKeyword: exactProduct,
       youtubeSearchUrl: `https://www.youtube.com/results?search_query=${encodeURIComponent(exactTopic)}`,
       naverSearchUrl: `https://m.search.naver.com/search.naver?query=${encodeURIComponent(exactTopic)}`,
-      coupangSearchUrl: `https://www.coupang.com/np/search?component=&q=${encodeURIComponent(exactProduct)}&channel=user`,
+      coupangSearchUrl: `https://www.coupang.com/np/search?q=${encodeURIComponent(exactProduct)}`,
     };
   } catch {
     const cleanKw = topic.keyword.replace(/[^\w가-힣\s]/g, '').trim();
@@ -60,7 +60,7 @@ export async function sanitizeSearchKeywords(
       exactProductKeyword: cleanKw,
       youtubeSearchUrl: `https://www.youtube.com/results?search_query=${encodeURIComponent(topic.keyword)}`,
       naverSearchUrl: `https://m.search.naver.com/search.naver?query=${encodeURIComponent(topic.keyword)}`,
-      coupangSearchUrl: `https://www.coupang.com/np/search?component=&q=${encodeURIComponent(cleanKw)}&channel=user`,
+      coupangSearchUrl: `https://www.coupang.com/np/search?q=${encodeURIComponent(cleanKw)}`,
     };
   }
 }
@@ -218,11 +218,11 @@ export function auditAndFixHtmlLinks(
 ): string {
   let fixedHtml = htmlContent;
 
-  // 1. 잘못된 쿠팡 링크가 있거나 오탈자가 있을 경우 정제된 쿠팡 URL로 교정
-  fixedHtml = fixedHtml.replace(/href="https:\/\/www\.coupang\.com\/[^"]*"/g, `href="${validUrls.coupang}"`);
+  // 1. 잘못된 쿠팡 링크가 있거나 오탈자가 있을 경우 정제된 쿠팡 URL로 교정 (따옴표 종류 무관)
+  fixedHtml = fixedHtml.replace(/href=['"]https:\/\/www\.coupang\.com\/[^'"]*['"]/g, `href="${validUrls.coupang}"`);
 
-  // 2. 잘못된 유튜브 검색 링크 교정
-  fixedHtml = fixedHtml.replace(/href="https:\/\/www\.youtube\.com\/results\?search_query=[^"]*"/g, `href="${validUrls.youtube}"`);
+  // 2. 잘못된 유튜브 검색 링크 교정 (따옴표 종류 무관)
+  fixedHtml = fixedHtml.replace(/href=['"]https:\/\/www\.youtube\.com\/results\?search_query=[^'"]*['"]/g, `href="${validUrls.youtube}"`);
 
   // 3. <a> 태그에 target="_blank" rel="noopener noreferrer" 속성 강제 부여
   fixedHtml = fixedHtml.replace(/<a\s+(?!.*?target=)([^>]+)>/g, '<a target="_blank" rel="noopener noreferrer" $1>');

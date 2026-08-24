@@ -109,6 +109,30 @@ export class BloggerClient {
     };
   }
 
+  async getPost(postId: string): Promise<BloggerPost> {
+    const token = await this.getAccessToken();
+    const url = `https://www.googleapis.com/blogger/v3/blogs/${this.blogId}/posts/${postId}`;
+
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`Blogger 글 조회 실패: ${err}`);
+    }
+
+    const data = (await res.json()) as any;
+    return {
+      id: data.id,
+      title: data.title,
+      content: data.content,
+      labels: data.labels,
+      url: data.url,
+      status: data.status,
+    };
+  }
+
   async deletePost(postId: string): Promise<void> {
     const token = await this.getAccessToken();
     const url = `https://www.googleapis.com/blogger/v3/blogs/${this.blogId}/posts/${postId}`;
