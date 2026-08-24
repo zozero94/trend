@@ -3,7 +3,7 @@ import { TrendPost, AgentFeedback, TrendTopic } from './types.js';
 import { generateContentWithFallback, safeJsonParse } from './model-resolver.js';
 
 /**
- * 대한민국 최고 수준의 15인 전문 감수 위원회
+ * 대한민국 최고 수준의 16인 전문 감수 위원회
  */
 export const TREND_REVIEWER_AGENTS = [
   { id: 'ctr_headline', name: 'CTR 후킹 헤드라인 마스터', role: '스마트폰 2030 직장인/학생이 무조건 클릭하게 만드는 후킹 어그로력 검증' },
@@ -25,7 +25,7 @@ export const TREND_REVIEWER_AGENTS = [
 ];
 
 /**
- * 15인 트렌드 전문가 에이전트 종합 채점
+ * 16인 트렌드 전문가 에이전트 종합 채점
  */
 export async function evaluateWith15TrendAgents(
   apiKey: string,
@@ -39,10 +39,10 @@ export async function evaluateWith15TrendAgents(
     (a, i) => `${i + 1}. [${a.name}] (${a.role})`
   ).join('\n');
 
-  const prompt = `당신은 대한민국 최고의 트렌드/미디어 바이럴 15인 감수 위원회입니다.
-아래 작성된 트렌드 원고(Round ${round} 버전)를 15인의 전문가 관점에서 엄격하고 날카롭게 채점(1~10점)하고 보완 지침을 작성하세요.
+  const prompt = `당신은 대한민국 최고의 트렌드/미디어 바이럴 16인 감수 위원회입니다.
+아래 작성된 트렌드 원고(Round ${round} 버전)를 16인의 전문가 관점에서 엄격하고 날카롭게 채점(1~10점)하고 보완 지침을 작성하세요.
 
-[15인의 트렌드 전문가 페르소나]
+[16인의 트렌드 전문가 페르소나]
 ${agentDescriptions}
 
 [평가 대상 원고]
@@ -66,7 +66,7 @@ ${agentDescriptions}
     "score": 8,
     "strengths": "잘된 부분",
     "improvements": "구체적인 보강 및 수정 지시사항"
-  }, ... (총 15개)
+  }, ... (총 16개)
 ]`;
 
   try {
@@ -91,18 +91,18 @@ ${agentDescriptions}
       feedbacks: TREND_REVIEWER_AGENTS.map((a) => ({
         agentName: a.name,
         role: a.role,
-        score: 8,
+        score: 7,
         strengths: '기본적인 트렌드 맥락 포착',
         improvements: '솔직한 단점 분석 및 모바일 요약 박스 보강 필요',
       })),
-      averageScore: 8.0,
-      passed: true,
+      averageScore: 7.0,
+      passed: false,
     };
   }
 }
 
 /**
- * 15인의 피드백을 수용하여 원고 전면 리라이팅
+ * 16인의 피드백을 수용하여 원고 전면 리라이팅
  */
 export async function rewriteTrendPostWithFeedback(
   apiKey: string,
@@ -121,7 +121,7 @@ export async function rewriteTrendPostWithFeedback(
     .join('\n\n');
 
   const systemInstruction = `당신은 대한민국 최고 수준의 수석 트렌드 에디터이자 바이럴 콘텐츠 디렉터입니다.
-15인의 바이럴 전문 감수 위원회가 제출한 상세 피드백(Round ${round})을 100% 흡수하여, 기존 원고를 종합 평점 9점 이상의 최상급 프리미엄 반응형 트렌드 칼럼으로 전면 리라이팅하세요.
+16인의 바이럴 전문 감수 위원회가 제출한 상세 피드백(Round ${round})을 100% 흡수하여, 기존 원고를 종합 평점 8.5점 이상의 최상급 프리미엄 반응형 트렌드 칼럼으로 전면 리라이팅하세요.
 
 [리라이팅 필수 반영 항목]
 1. **🔥 CTR 극대화 어그로/후킹 제목 강화**: 클릭률을 폭발적으로 끌어올리는 감각적인 제목으로 업그레이드
@@ -133,7 +133,7 @@ export async function rewriteTrendPostWithFeedback(
 [출력 형식]
 반드시 다음 JSON 포맷으로만 응답하세요:
 {
-  "title": "15인 피드백을 반영해 더욱 매력적으로 개선된 후킹 제목",
+  "title": "16인 피드백을 반영해 더욱 매력적으로 개선된 후킹 제목",
   "summary": "3줄 핵심 요약",
   "metaDescription": "검색 최적화 메타 디스크립션",
   "tags": ["태그1", "태그2", "태그3", "태그4", "태그5"],
@@ -143,13 +143,13 @@ export async function rewriteTrendPostWithFeedback(
   const prompt = `[현재 원고 제목]: ${currentPost.title}
 [카테고리]: ${topic.keyword} (${topic.categoryNameKo})
 
-[15인의 전문가 상세 리뷰 및 보강 지침 (Round ${round})]:
+[16인의 전문가 상세 리뷰 및 보강 지침 (Round ${round})]:
 ${feedbackSummary}
 
 [기존 본문]:
 ${currentPost.htmlContent}
 
-위 15인의 지적 사항을 100% 반영하여 종합 80점(8.0점) 이상을 달성할 수 있는 완벽한 최종 원고로 리라이팅해 주세요.`;
+위 16인의 지적 사항을 100% 반영하여 종합 80점(8.0점) 이상을 달성할 수 있는 완벽한 최종 원고로 리라이팅해 주세요.`;
 
   try {
     const response = await generateContentWithFallback(ai, {
@@ -182,45 +182,53 @@ ${currentPost.htmlContent}
 
 /**
  * 최소 2회 이상 + 종합점수 80점(8.0점) 돌파할 때까지 반복하는 전문가 감수 루프
+ * (최대 4회 시도 후에도 80점 미달 시 passed = false 반환)
  */
 export async function executeTwoRoundTrendReviewLoop(
   apiKey: string,
   initialPost: TrendPost,
   topic: TrendTopic
-): Promise<{ finalPost: TrendPost; reviewSummary: string }> {
+): Promise<{ finalPost: TrendPost; reviewSummary: string; passed: boolean; finalScore: number }> {
   console.log('\n================================================================');
-  console.log('🏛️ [스킬 가동] 트렌드 15인 전문 위원회 감수 루프 시작 (최소 2회 + 80점 돌파제)');
+  console.log('🏛️ [스킬 가동] 트렌드 16인 전문 위원회 감수 루프 시작 (최소 2회 + 80점 돌파제)');
   console.log('================================================================');
 
   let currentPost = initialPost;
   let round = 1;
   let summaryNotes: string[] = [];
-  const MAX_ROUNDS = 4; // 무한루프 방지 안전 상한
+  let lastScore = 0;
+  let passed = false;
+  const MAX_ROUNDS = 4; // 최대 4회 반복
 
   while (round <= MAX_ROUNDS) {
-    console.log(`\n🔍 [Round ${round}] 15인의 바이럴/트렌드 전문가가 평가 중...`);
+    console.log(`\n🔍 [Round ${round}/${MAX_ROUNDS}] 16인의 바이럴/트렌드 전문가가 평가 중...`);
     const evalResult = await evaluateWith15TrendAgents(apiKey, currentPost, topic, round);
-    const avgScoreOutOf100 = Math.round(evalResult.averageScore * 10);
-    console.log(`📊 Round ${round} 종합 평점: ${evalResult.averageScore} / 10점 (${avgScoreOutOf100}점)`);
+    lastScore = evalResult.averageScore;
+    const avgScoreOutOf100 = Math.round(lastScore * 10);
+    console.log(`📊 Round ${round} 종합 평점: ${lastScore} / 10점 (${avgScoreOutOf100}점)`);
 
     const topIssues = evalResult.feedbacks.filter((f) => f.score <= 7).slice(0, 3);
     topIssues.forEach((f) => console.log(`   - [${f.agentName}] (${f.score}점): ${f.improvements}`));
 
-    summaryNotes.push(`Round ${round}: ${evalResult.averageScore}점 (${avgScoreOutOf100}점/100점)`);
+    summaryNotes.push(`R${round}:${avgScoreOutOf100}점`);
 
-    // 종료 조건: 최소 2회 이상 실행 + 평점 8.0점 (80점) 이상 달성 시 완료
-    if (round >= 2 && evalResult.averageScore >= 8.0) {
+    // 종료 조건: 최소 2회 이상 실행 + 평점 8.0점 (80점) 이상 달성 시 통과
+    if (round >= 2 && lastScore >= 8.0) {
       console.log(`🎉 [기준 통과] Round ${round}에서 종합점수 ${avgScoreOutOf100}점으로 80점 기준 돌파 성공!`);
+      passed = true;
       break;
     }
 
     if (round >= MAX_ROUNDS) {
-      console.log(`⚠️ 최대 라운드(${MAX_ROUNDS}회)에 도달하여 현재 완성본으로 최종 확정합니다.`);
+      passed = lastScore >= 8.0;
+      if (!passed) {
+        console.warn(`⚠️ 최대 라운드(${MAX_ROUNDS}회) 도달 후에도 80점 미달 (최종: ${avgScoreOutOf100}점) -> 품질 기준 미달 처리`);
+      }
       break;
     }
 
     // 다음 라운드를 위한 전면 리라이팅 실행
-    console.log(`\n✍️ [Round ${round} 리라이팅] 15인 피드백을 반영하여 원고 전면 보강 중...`);
+    console.log(`\n✍️ [Round ${round} 리라이팅] 16인 피드백을 반영하여 원고 전면 보강 중...`);
     currentPost = await rewriteTrendPostWithFeedback(apiKey, currentPost, evalResult.feedbacks, topic, round);
     console.log(`✅ Round ${round} 보강 완료: "${currentPost.title}"`);
     round++;
@@ -234,9 +242,6 @@ export async function executeTwoRoundTrendReviewLoop(
   const devAudit = auditEngineeringAndArchitecture(currentPost, topic);
   currentPost.htmlContent = devAudit.sanitizedHtml;
   console.log(`🛠️ 개발/아키텍처 종합 평점: ${devAudit.averageDevScore} / 10점 (${devAudit.overallPassed ? '전원 통과' : '경미한 수정'})`);
-  devAudit.feedbacks.forEach((f) => {
-    console.log(`   - [${f.agentName}] (${f.score}점): ${f.recommendations.join(', ')}`);
-  });
 
   // =========================================================================
   // ★ [메인 총괄 에이전트] 총괄 편집국장 최종 마스터 검수 및 발행 승인 단계
@@ -249,11 +254,13 @@ export async function executeTwoRoundTrendReviewLoop(
     summaryNotes.join(' -> '),
     devAudit.technicalIssuesSummary
   );
-  console.log(`🎖️ [최종 마스터 승인 완료] 수석 편집국장 발행 승인 도장 날인: "${masterPost.title}"`);
+  console.log(`🎖️ [최종 마스터 승인 완료] 수석 편집국장 최종 심사 완료: "${masterPost.title}"`);
 
   return {
     finalPost: masterPost,
-    reviewSummary: `${summaryNotes.join(' ➔ ')} | Dev평점: ${devAudit.averageDevScore}점`,
+    reviewSummary: `${summaryNotes.join(' ➔ ')} | Dev:${devAudit.averageDevScore}점`,
+    passed,
+    finalScore: Math.round(lastScore * 10),
   };
 }
 
@@ -270,10 +277,10 @@ export async function executeChiefEditorFinalInspection(
   const ai = new GoogleGenAI({ apiKey });
 
   const systemInstruction = `당신은 대한민국 최고 권위의 트렌드/미디어 매거진 총괄 편집국장(Editor-in-Chief Main Agent)입니다.
-15인의 콘텐츠 전문 감수 위원회와 5인의 개발/아키텍처 엔지니어링 에이전트가 올린 종합 평가 결과를 토대로, 최종 원고를 직접 판단하고 완성도 100%의 최종 마스터본으로 승인 및 리라이팅하세요.
+16인의 콘텐츠 전문 감수 위원회와 5인의 개발/아키텍처 엔지니어링 에이전트가 올린 종합 평가 결과를 토대로, 최종 원고를 직접 판단하고 완성도 100%의 최종 마스터본으로 승인 및 리라이팅하세요.
 
 [편집국장 최종 마스터 검수 체크리스트]
-1. **문맥 리듬감 & 톤앤매너 완결성**: 15인의 개별 수정 사항들이 이질감 없이 하나의 유려한 글처럼 매끄럽게 연결되었는가?
+1. **문맥 리듬감 & 톤앤매너 완결성**: 16인의 개별 수정 사항들이 이질감 없이 하나의 유려한 글처럼 매끄럽게 연결되었는가?
 2. **후킹 & 신뢰성의 황금 밸런스**: 자극적인 클릭 유도(어그로)와 실질적인 팩트(내돈내산 단점/가격/정보)가 5:5로 완벽한 균형을 이루는가?
 3. **개발/아키텍처 무결성 최종 반영**: 5인의 엔지니어링 에이전트가 지적한 기술적 이슈(DOM 닫는 태그, 보안 속성, XSS 방지)를 완벽히 해결했는가?
 4. **군더더기 및 번역투 최종 소제**: 지루한 서론이나 중복되는 수식어를 걷어내고 3초 만에 몰입되도록 정제.
@@ -288,7 +295,7 @@ export async function executeChiefEditorFinalInspection(
   "htmlContent": "<p>완성된 최종 마스터 HTML 본문...</p>"
 }`;
 
-  const prompt = `[15인 콘텐츠 감수 이력]: ${reviewHistory}
+  const prompt = `[16인 콘텐츠 감수 이력]: ${reviewHistory}
 [5인 개발/아키텍처 감사 보고]: ${devIssuesSummary || '기술적 이슈 없음 (전원 합격)'}
 [주제 키워드]: ${topic.keyword} (${topic.categoryNameKo})
 [감수 통과 원고 제목]: ${post.title}

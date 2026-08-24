@@ -135,7 +135,25 @@ async function runTrendPipeline() {
 
   // --- 4단계: 16인 트렌드/바이럴 에이전트 최소 2회+80점 돌파 감수 및 리라이팅 ---
   console.log('\n[4단계] 16인의 바이럴/트렌드 전문가 감수 루프 실행 (최소 2회 + 80점 돌파제)...');
-  const { finalPost, reviewSummary } = await executeTwoRoundTrendReviewLoop(geminiApiKey, initialPost, topic);
+  const reviewResult = await executeTwoRoundTrendReviewLoop(geminiApiKey, initialPost, topic);
+  const { finalPost, reviewSummary, passed, finalScore } = reviewResult;
+
+  // ★ [품질 방어선] 80점 미만 시 블로거 등록 및 발행 승인 원천 차단 (반려 처리)
+  if (!passed) {
+    console.error(`\n🚫 [품질 기준 미달] 16인 종합 점수(${finalScore}점)가 통과 기준(80점)에 미달하여 발행을 중단(반려)합니다.`);
+    if (telegramBotToken && telegramChatId) {
+      const telegram = new TelegramNotifier(telegramBotToken, telegramChatId, bloggerBlogId || '');
+      await telegram.sendMessage(
+        `🚫 <b>[트렌드 2호점] 원고 품질 미달 자동 반려</b>\n\n` +
+        `📌 <b>주제:</b> ${topic.keyword} (${topic.categoryNameKo})\n` +
+        `📝 <b>제목:</b> ${finalPost.title}\n` +
+        `📊 <b>16인 감수 최종 평점:</b> <b>${finalScore}점</b> / 100점 (기준: 80점)\n\n` +
+        `⚠️ <b>반려 사유:</b> 16인의 전문 감수단 심사에서 4라운드 동안 목표 점수(80점)를 달성하지 못하여 구글 블로그 등록 및 발행이 자동 중단(반려)되었습니다.\n\n` +
+        `🔍 <b>감수 이력:</b> ${reviewSummary}`
+      );
+    }
+    return;
+  }
 
   // --- 4.5단계: 본문 최종 HTML 내 모든 링크 전수 감사 및 오탈자/이미지/더미요소 자동 교정 ---
   console.log('\n[4.5단계] 본문 HTML 내 모든 하이퍼링크 무결성 전수 감사 및 미디어 교정...');

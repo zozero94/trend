@@ -67,4 +67,23 @@ Blogger ID: ${bloggerPostId}
 
     console.log('📱 [Telegram] 텔레그램 승인 알림 발송 완료 (@zozero94bot)');
   }
+
+  async sendMessage(text: string, parseMode: string = 'HTML'): Promise<boolean> {
+    const url = `https://api.telegram.org/bot${this.botToken}/sendMessage`;
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: this.chatId,
+          text,
+          parse_mode: parseMode,
+        }),
+      });
+      return res.ok;
+    } catch (e) {
+      console.error('Telegram sendMessage error:', e);
+      return false;
+    }
+  }
 }
