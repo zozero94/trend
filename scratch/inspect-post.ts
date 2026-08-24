@@ -8,9 +8,13 @@ async function main() {
     process.env.BLOGGER_CLIENT_SECRET!,
     process.env.BLOGGER_REFRESH_TOKEN!
   );
-  const post = await blogger.getPost('3345858965161476618');
-  console.log('TITLE:', post.title);
-  console.log('FULL CONTENT:');
-  console.log(post.content);
+  const posts = await blogger.getPosts(5);
+  for (const p of posts) {
+    console.log('\n=============================================');
+    console.log('ID:', p.id, '| TITLE:', p.title);
+    console.log('CONTENT SNIPPET:\n', p.content.slice(0, 500));
+    console.log('ALL LINKS:', p.content.match(/href=['"][^'"]*['"]/gi));
+    console.log('ALL DIVS/IMAGES:', p.content.match(/<div[^>]*>[\s\S]*?<\/div>/gi)?.filter(d => d.includes('이미지') || d.includes('Alt:')));
+  }
 }
 main();
