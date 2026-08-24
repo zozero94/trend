@@ -6,11 +6,10 @@ export async function generateInitialTrendPost(
   apiKey: string,
   topic: TrendTopic,
   verifiedLinks: VerifiedLink[],
+  coupangSearchUrl: string,
   coupangPartnersId: string = 'AF2968960'
 ): Promise<TrendPost> {
   const ai = new GoogleGenAI({ apiKey });
-
-  const coupangSearchUrl = `https://www.coupang.com/np/search?component=&q=${encodeURIComponent(topic.keyword)}&channel=user`;
 
   const verifiedLinksSummary = verifiedLinks
     .map(
@@ -25,10 +24,7 @@ export async function generateInitialTrendPost(
 [핵심 작성 원칙]
 1. ★ **CTR 극대화 키워드 중심 후킹 제목**:
    - 클릭을 유발하는 강력한 호기심/의문형/경고형 후킹 기법 사용.
-   - 예시:
-     - 핫플: "SNS 난리난 성수 [식당명], 웨이팅 2시간 값어치 할까? (솔직 후기·주차 팁)"
-     - 꿀템: "릴스 1000만 뷰 [제품명], 내돈내산 하기 전 꼭 알아야 할 충격 단점 3가지"
-     - 밈/이슈: "요즘 릴스에 맨날 나오는 '[키워드]' 뜻과 유래 완벽 정리 (모르면 유행 뒤처짐)"
+   - 밈/브랜드/상품명에 오탈자(예: 삐끼삐끼 -> 삑기삑기 등)가 절대 없도록 정확한 표준 명칭을 사용하세요.
 2. **모바일 3초 스크롤 가독성 (HTML 스타일)**:
    - 문단은 2~3문장 단위로 짧게 분리.
    - 핵심 단어는 <strong> 태그로 강조.
@@ -41,8 +37,8 @@ export async function generateInitialTrendPost(
    - **MEME_TREND (화제의 밈/이슈)**:
      - 밈의 원본 출처 및 유래, 정확한 뜻과 맥락, 상황별 찰진 사용 예시, 패러디 반응.
 4. **쿠팡 파트너스 CTA 배너 (${topic.category === 'SHOPPING_ITEM' ? '필수 포함' : '해당시 포함'})**:
-   - 쇼핑 아이템인 경우 본문 하단에 반드시 세련된 CTA 버튼과 공정위 필수 문구를 삽입하세요:
-   \`<div style="margin: 32px 0; padding: 24px; background: #fff5f5; border-radius: 12px; border: 1px solid #ffd8d8; text-align: center;"><a href="${coupangSearchUrl}" target="_blank" rel="noopener noreferrer" style="display: inline-block; padding: 14px 28px; background: #e60012; color: #ffffff !important; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; box-shadow: 0 4px 12px rgba(230,0,18,0.25);">🔥 [${topic.keyword}] 최저가 & 실시간 재고 확인하기</a><p style="font-size: 11px; color: #888888; margin-top: 12px; margin-bottom: 0;">이 포스팅은 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다. (추천인: ${coupangPartnersId})</p></div>\`
+   - 쇼핑/아이템 연관 주제인 경우 본문 하단에 반드시 세련된 CTA 버튼과 공정위 필수 문구를 삽입하세요:
+   \`<div style="margin: 32px 0; padding: 24px; background: #fff5f5; border-radius: 12px; border: 1px solid #ffd8d8; text-align: center;"><a href="${coupangSearchUrl}" target="_blank" rel="noopener noreferrer" style="display: inline-block; padding: 14px 28px; background: #e60012; color: #ffffff !important; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; box-shadow: 0 4px 12px rgba(230,0,18,0.25);">🔥 [${topic.keyword}] 최저가 & 실시간 재고 확인하기 &rarr;</a><p style="font-size: 11px; color: #888888; margin-top: 12px; margin-bottom: 0;">이 포스팅은 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다. (추천인: ${coupangPartnersId})</p></div>\`
 
 [출력 형식]
 반드시 다음 JSON 포맷으로만 응답하세요:
@@ -87,7 +83,7 @@ ${verifiedLinksSummary || '기본 트렌드 검색 결과 반영'}
       tags: parsed.tags || [topic.keyword, topic.categoryNameKo, '트렌드', '핫플', '꿀템'],
       htmlContent: parsed.htmlContent || `<p>${topic.keyword} 분석 내용</p>`,
       verifiedLinks,
-      coupangUrl: topic.category === 'SHOPPING_ITEM' ? coupangSearchUrl : undefined,
+      coupangUrl: coupangSearchUrl,
     };
   } catch (e) {
     console.error('[TrendAI] 초안 작성 실패, 기본 템플릿 반환:', e);
@@ -100,6 +96,7 @@ ${verifiedLinksSummary || '기본 트렌드 검색 결과 반영'}
       tags: [topic.keyword, '트렌드', '핫이슈'],
       htmlContent: `<h2>요즘 난리난 ${topic.keyword}</h2><p>실시간으로 큰 화제를 모으고 있는 ${topic.keyword}의 핵심 정보를 전해드립니다.</p>`,
       verifiedLinks,
+      coupangUrl: coupangSearchUrl,
     };
   }
 }

@@ -1,6 +1,10 @@
 import 'dotenv/config';
 import { selectTopTrendTopic } from './collector.js';
-import { verifyMultipleLinks } from './verifier.js';
+import {
+  sanitizeSearchKeywords,
+  verifyUrlAndCaptureScreenshot,
+  auditAndFixHtmlLinks,
+} from './verifier.js';
 import { generateInitialTrendPost } from './ai.js';
 import { executeTwoRoundTrendReviewLoop } from './reviewer.js';
 import { BloggerClient } from './blogger.js';
@@ -104,22 +108,45 @@ async function runTrendPipeline() {
   console.log(`   - 후킹 포인트: ${topic.headlineHook}`);
   console.log(`   - 탐지 소스: ${topic.sources.join(', ')} (신뢰도 점수: ${topic.matchScore}점)`);
 
-  // --- 2단계: 연관 링크 추출 및 Playwright 스크린샷 팩트체크 ---
-  console.log('\n[2단계] 연관 웹 링크 추출 및 랜딩페이지 일치성/스크린샷 검증...');
-  const targetUrlsToVerify = [
-    `https://m.search.naver.com/search.naver?query=${encodeURIComponent(topic.keyword)}`,
-  ];
-  const verifiedLinks = await verifyMultipleLinks(geminiApiKey, targetUrlsToVerify, topic);
+  // --- 2단계: 표준 키워드 정제 & Playwright 스크린샷 3대 플랫폼 전수 크로스체크 ---
+  console.log('\n[2단계] 표준 키워드 정제 및 Playwright 스크린샷 3대 플랫폼(네이버·유튜브·쿠팡) 전수 검증...');
+  const sanitized = await sanitizeSearchKeywords(geminiApiKey, topic);
+  console.log(`   - 오탈자 없는 표준 키워드: "${sanitized.exactTopicKeyword}"`);
+  console.log(`   - 쿠팡 100% 검색용 상품명: "${sanitized.exactProductKeyword}"`);
+
+  const verifiedLinks = await Promise.all([
+    verifyUrlAndCaptureScreenshot(geminiApiKey, sanitized.naverSearchUrl, sanitized.exactTopicKeyword, 'naver'),
+    verifyUrlAndCaptureScreenshot(geminiApiKey, sanitized.youtubeSearchUrl, sanitized.exactTopicKeyword, 'youtube'),
+    verifyUrlAndCaptureScreenshot(geminiApiKey, sanitized.coupangSearchUrl, sanitized.exactProductKeyword, 'coupang'),
+  ]);
 
   // --- 3단계: CTR 극대화 후킹 초안 생성 ---
   console.log('\n[3단계] 클릭률 극대화 후킹 초안 작성 중...');
-  const initialPost = await generateInitialTrendPost(geminiApiKey, topic, verifiedLinks, coupangPartnersId);
+  const initialPost = await generateInitialTrendPost(
+    geminiApiKey,
+    topic,
+    verifiedLinks,
+    sanitized.coupangSearchUrl,
+    coupangPartnersId
+  );
   console.log(`📄 작성된 초안 제목: "${initialPost.title}"`);
 
   // --- 4단계: 10인 트렌드/바이럴 에이전트 2회 교차 감수 및 리라이팅 ---
   console.log('\n[4단계] 10인의 바이럴/트렌드 전문가 감수 루프 실행...');
   const { finalPost, reviewSummary } = await executeTwoRoundTrendReviewLoop(geminiApiKey, initialPost, topic);
-  console.log(`✨ 최종 리라이팅 완성: "${finalPost.title}"`);
+
+  // --- 4.5단계: 본문 최종 HTML 내 모든 링크 전수 감사 및 오탈자 자동 교정 ---
+  console.log('\n[4.5단계] 본문 HTML 내 모든 하이퍼링크 무결성 전수 감사 및 교정...');
+  finalPost.htmlContent = auditAndFixHtmlLinks(
+    finalPost.htmlContent,
+    {
+      youtube: sanitized.youtubeSearchUrl,
+      naver: sanitized.naverSearchUrl,
+      coupang: sanitized.coupangSearchUrl,
+    },
+    sanitized.exactTopicKeyword
+  );
+  console.log(`✨ 최종 리라이팅 및 링크 무결성 검증 완성: "${finalPost.title}"`);
 
   // --- 5단계: 구글 블로거 2호점에 Draft 등록 ---
   const isDryRun = process.argv.includes('--dry-run');
@@ -139,7 +166,7 @@ async function runTrendPipeline() {
   const draftPost = await blogger.createDraftPost(
     finalPost.title,
     finalPost.htmlContent,
-    [topic.categoryNameKo, topic.keyword, ...finalPost.tags]
+    [topic.categoryNameKo, sanitized.exactTopicKeyword, ...finalPost.tags]
   );
   console.log(`✅ Blogger Draft 등록 성공! (Post ID: ${draftPost.id})`);
 
