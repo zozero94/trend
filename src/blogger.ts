@@ -148,6 +148,41 @@ export class BloggerClient {
     }
   }
 
+  async updatePost(postId: string, title: string, content: string, labels: string[] = []): Promise<BloggerPost> {
+    const token = await this.getAccessToken();
+    const url = `https://www.googleapis.com/blogger/v3/blogs/${this.blogId}/posts/${postId}`;
+
+    const res = await fetch(url, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        kind: 'blogger#post',
+        id: postId,
+        title,
+        content,
+        labels,
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`Blogger 글 수정 실패: ${err}`);
+    }
+
+    const data = (await res.json()) as any;
+    return {
+      id: data.id,
+      title: data.title,
+      content: data.content,
+      labels: data.labels,
+      url: data.url,
+      status: data.status,
+    };
+  }
+
   async getPosts(maxResults: number = 30): Promise<BloggerPost[]> {
     const token = await this.getAccessToken();
     const url = `https://www.googleapis.com/blogger/v3/blogs/${this.blogId}/posts?maxResults=${maxResults}&fetchBodies=true&status=live`;

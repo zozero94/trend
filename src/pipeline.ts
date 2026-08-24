@@ -90,6 +90,13 @@ async function runTrendPipeline() {
       for (const item of linkQueue) {
         const verified = await verifyUrlAndCaptureScreenshot(geminiApiKey, item.url, item.keyword, item.type);
         verifiedLinks.push(verified);
+
+        // ★ [멀티모달 비전 팩트체크 피드백 루프] 가짜/파킹/75점 미달 시 안전한 네이버 검색 링크로 즉시 강제 치환!
+        if (item.type === 'general' && (!verified.isHealthy || !verified.isContentMatched || (verified.relevanceScore ?? 0) < 75)) {
+          console.warn(`⚠️ [오피셜 링크 불일치/파킹 감지] "${item.url}" (${verified.relevanceScore}점) -> 네이버 검증 링크로 100% 강제 치환!`);
+          sanitized.officialLandingUrl = sanitized.naverSearchUrl;
+          sanitized.officialSiteName = `${sanitized.exactTopicKeyword} 실시간 검색`;
+        }
       }
 
       // --- 3단계: CTR 극대화 후킹 초안 생성 ---

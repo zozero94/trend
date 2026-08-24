@@ -149,6 +149,19 @@ export async function verifyUrlAndCaptureScreenshot(
     const screenshotBuffer = await page.screenshot({ type: 'jpeg', quality: 85 });
     screenshotBase64 = screenshotBuffer.toString('base64');
     isHealthy = status >= 200 && status < 400;
+
+    // 가짜/파킹 도메인/빈 페이지 1차 감지
+    const isParkingOrDead =
+      domText.length < 30 ||
+      /lander|parking|buy this domain|domain is for sale|redirecting|parked domain/i.test(domText) ||
+      /lander|parking/i.test(pageTitle);
+
+    if (isParkingOrDead) {
+      isHealthy = false;
+      isContentMatched = false;
+      relevanceScore = 0;
+      verificationNotes = '파킹 도메인 또는 빈 리다이렉트 페이지 감지';
+    }
   } catch (browserError) {
     console.warn(`⚠️ [Verifier] Playwright 브라우저 캡처 실패, HTTP Fetch로 대체 검증:`, browserError);
 
@@ -166,6 +179,17 @@ export async function verifyUrlAndCaptureScreenshot(
       const match = htmlText.match(/<title[^>]*>([^<]+)<\/title>/i);
       pageTitle = match ? match[1].trim() : '';
       domText = htmlText.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').slice(0, 1500);
+
+      if (
+        domText.length < 30 ||
+        /lander|parking|buy this domain|domain is for sale|redirecting/i.test(domText) ||
+        /lander|parking/i.test(pageTitle)
+      ) {
+        isHealthy = false;
+        isContentMatched = false;
+        relevanceScore = 0;
+        verificationNotes = '파킹 도메인 또는 빈 리다이렉트 감지';
+      }
     } catch {
       status = 500;
       isHealthy = false;
@@ -190,9 +214,9 @@ export async function verifyUrlAndCaptureScreenshot(
 
 [정밀 시각 & 텍스트 검증 지침]
 첨부된 실제 웹페이지 스크린샷과 추출된 텍스트를 정밀 분석하여 다음을 판정하세요:
-1. **정상 랜딩 여부 (isHealthy)**: 404 에러, 403 차단, Akamai 차단(Incident Code 등), 빈 검색 결과, 로그인 차단 화면이면 false.
-2. **주제 일치성 (isContentMatched)**: 화면에 타겟 주제("${expectedTopicKeyword}")와 관련된 실제 콘텐츠나 상품이 확실히 노출되는지 판정.
-3. **일치성 점수 (relevanceScore)**: 0~100점 (80점 이상이면 통과, 70점 미만은 불일치).
+1. **정상 랜딩 여부 (isHealthy)**: 404 에러, 403 차단, Akamai 차단(Incident Code 등), 빈 검색 결과, 도메인 파킹(Lander) 화면이면 반드시 false!
+2. **주제 일치성 (isContentMatched)**: 화면에 타겟 주제("${expectedTopicKeyword}")와 관련된 실제 콘텐츠나 상품이 확실히 노출되는지 판정. 빈 화면이나 무관한 페이지면 반드시 false!
+3. **일치성 점수 (relevanceScore)**: 0~100점 (80점 이상이면 통과, 70점 미만은 불일치/탈락).
 4. **보정 제안 (suggestedCorrection)**: 불일치 시 올바른 키워드나 대안 URL 제안.
 
 반드시 다음 JSON 포맷으로만 응답하세요:
@@ -229,27 +253,28 @@ export async function verifyUrlAndCaptureScreenshot(
         suggestedCorrection: string;
         verificationNotes: string;
       }>(visionRes.text || '{}', {
-        isHealthy: true,
-        isContentMatched: true,
-        relevanceScore: 85,
+        isHealthy: false,
+        isContentMatched: false,
+        relevanceScore: 0,
         suggestedCorrection: '',
-        verificationNotes: '기본 일치성 확인',
+        verificationNotes: '비전 응답 파싱 실패',
       });
 
-      isHealthy = parsed.isHealthy ?? true;
-      isContentMatched = parsed.isContentMatched ?? true;
-      relevanceScore = parsed.relevanceScore ?? 80;
+      isHealthy = parsed.isHealthy ?? false;
+      isContentMatched = parsed.isContentMatched ?? false;
+      relevanceScore = parsed.relevanceScore ?? 0;
       suggestedCorrection = parsed.suggestedCorrection || '';
       verificationNotes = parsed.verificationNotes || '검증 완료';
     } catch (e) {
-      isContentMatched = true;
-      relevanceScore = 80;
-      verificationNotes = `페이지 응답 정상 (${status} OK)`;
+      isHealthy = false;
+      isContentMatched = false;
+      relevanceScore = 0;
+      verificationNotes = `비전 검증 예외 발생`;
     }
   } else {
     isContentMatched = false;
     relevanceScore = 0;
-    verificationNotes = `비정상 HTTP 응답 코드: ${status}`;
+    verificationNotes = verificationNotes || `비정상 HTTP 응답 코드: ${status}`;
   }
 
   const resultStatusIcon = isHealthy && isContentMatched && relevanceScore >= 70 ? '✅ 통과' : '⚠️ 주의/불일치';

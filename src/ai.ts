@@ -19,11 +19,15 @@ export async function generateInitialTrendPost(
     .join('\n');
 
   const youtubeEmbedHtml = `
-  <div style="margin: 32px 0;">
-    <p style="font-size: 14px; font-weight: bold; color: #191f28; margin-bottom: 8px;">🎬 [실시간 영상] 유튜브 쇼츠 & 화제 현장 영상 둘러보기</p>
-    <div style="position: relative; width: 100%; max-width: 100%; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 14px; box-shadow: 0 4px 16px rgba(0,0,0,0.08); background: #000000;">
-      <iframe src="https://www.youtube-nocookie.com/embed?listType=search&list=${encodeURIComponent(topic.keyword)}" style="position: absolute; top:0; left: 0; width: 100%; height: 100%; border:0;" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="lazy"></iframe>
+  <div style="margin: 32px 0; padding: 22px; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border-radius: 16px; color: #ffffff; box-shadow: 0 8px 24px rgba(0,0,0,0.12); text-align: center;">
+    <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 12px;">
+      <span style="font-size: 22px;">🎬</span>
+      <h4 style="margin: 0; font-size: 17px; font-weight: 700; color: #ffffff;">[실시간 화제] ${topic.keyword} 유튜브 쇼츠 & 현장 영상</h4>
     </div>
+    <p style="font-size: 13.5px; color: #cbd5e1; margin: 0 0 18px 0; line-height: 1.5;">SNS에서 화제를 모은 ${topic.keyword}의 실제 영상과 리얼 리뷰를 지금 확인하세요.</p>
+    <a href="https://www.youtube.com/results?search_query=${encodeURIComponent(topic.keyword)}" target="_blank" rel="noreferrer noopener" referrerpolicy="no-referrer" style="display: inline-flex; align-items: center; gap: 8px; background: #ff0000; color: #ffffff !important; padding: 12px 24px; border-radius: 30px; font-weight: 700; font-size: 15px; text-decoration: none; box-shadow: 0 4px 14px rgba(255,0,0,0.4);">
+      ▶ 유튜브에서 화제 영상 바로보기 &rarr;
+    </a>
   </div>`;
 
   const systemInstruction = `당신은 대한민국에서 가장 감각적인 트렌드 매거진 수석 에디터이자, 릴스/쇼츠 바이럴 및 모바일 UX 전문가입니다.
