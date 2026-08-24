@@ -1,7 +1,7 @@
 export type TrendCategory = 'HOT_PLACE' | 'SHOPPING_ITEM' | 'MEME_TREND' | 'LIFE_HACK';
 
 export interface TrendRawItem {
-  source: 'youtube' | 'google_trends' | 'naver_datalab';
+  source: 'youtube' | 'google_trends' | 'naver_datalab' | 'tiktok_reels';
   keyword: string;
   title: string;
   snippet?: string;
@@ -14,7 +14,7 @@ export interface TrendTopic {
   category: TrendCategory;
   categoryNameKo: string; // "SNS 핫플레이스/맛집" | "바이럴 꿀템/쇼핑" | "화제의 밈/이슈"
   headlineHook: string;
-  sources: ('youtube' | 'google_trends' | 'naver_datalab')[];
+  sources: ('youtube' | 'google_trends' | 'naver_datalab' | 'tiktok_reels')[];
   matchScore: number;
   searchQueries: string[];
 }
