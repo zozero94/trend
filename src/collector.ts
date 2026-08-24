@@ -182,17 +182,18 @@ ${alreadyPublishedTitles.length > 0 ? alreadyPublishedTitles.slice(0, 20).map((t
     },
   });
 
+  const rawObj = safeJsonParse<any>(response.text || '{}', null);
   const fallbackCandidate = allItems[0]?.keyword || '실시간 화제의 신상 트렌드';
 
-  const parsed = safeJsonParse<TrendTopic>(response.text || '{}', {
-    keyword: fallbackCandidate,
-    category: 'HOT_PLACE' as TrendCategory,
-    categoryNameKo: 'SNS 핫플레이스/맛집',
-    headlineHook: `${fallbackCandidate} 솔직 후기 및 완벽 분석`,
-    sources: ['google_trends', 'youtube'],
-    matchScore: 90,
-    searchQueries: [`${fallbackCandidate} 위치`, `${fallbackCandidate} 웨이팅`, `${fallbackCandidate} 후기`],
-  });
-
-  return parsed;
+  return {
+    keyword: rawObj?.keyword || fallbackCandidate,
+    category: (rawObj?.category as TrendCategory) || ('HOT_PLACE' as TrendCategory),
+    categoryNameKo: rawObj?.categoryNameKo || 'SNS 핫플레이스 & 라이프 트렌드',
+    headlineHook: rawObj?.headlineHook || `${fallbackCandidate} 솔직 후기 및 완벽 분석`,
+    sources: Array.isArray(rawObj?.sources) && rawObj.sources.length > 0 ? rawObj.sources : ['google_trends', 'youtube'],
+    matchScore: typeof rawObj?.matchScore === 'number' ? rawObj.matchScore : 90,
+    searchQueries: Array.isArray(rawObj?.searchQueries) && rawObj.searchQueries.length > 0
+      ? rawObj.searchQueries
+      : [`${fallbackCandidate} 위치`, `${fallbackCandidate} 가격`, `${fallbackCandidate} 솔직 후기`],
+  };
 }
