@@ -108,13 +108,15 @@ async function runTrendPipeline() {
   console.log(`   - 후킹 포인트: ${topic.headlineHook}`);
   console.log(`   - 탐지 소스: ${topic.sources.join(', ')} (신뢰도 점수: ${topic.matchScore}점)`);
 
-  // --- 2단계: 표준 키워드 정제 & Playwright 스크린샷 3대 플랫폼 전수 크로스체크 ---
-  console.log('\n[2단계] 표준 키워드 정제 및 Playwright 스크린샷 3대 플랫폼(네이버·유튜브·쿠팡) 전수 검증...');
+  // --- 2단계: 표준 키워드 정제 & Playwright 스크린샷 3대 플랫폼+공식출처 전수 크로스체크 ---
+  console.log('\n[2단계] 표준 키워드 정제 및 Playwright 스크린샷 4대 랜딩(공식처·네이버·유튜브·쿠팡) 전수 검증...');
   const sanitized = await sanitizeSearchKeywords(geminiApiKey, topic);
   console.log(`   - 오탈자 없는 표준 키워드: "${sanitized.exactTopicKeyword}"`);
   console.log(`   - 쿠팡 100% 검색용 상품명: "${sanitized.exactProductKeyword}"`);
+  console.log(`   - 🏛️ 공식 오피셜 출처/예약처: "${sanitized.officialSiteName}" (${sanitized.officialLandingUrl})`);
 
   const verifiedLinks = await Promise.all([
+    verifyUrlAndCaptureScreenshot(geminiApiKey, sanitized.officialLandingUrl, sanitized.exactTopicKeyword, 'general'),
     verifyUrlAndCaptureScreenshot(geminiApiKey, sanitized.naverSearchUrl, sanitized.exactTopicKeyword, 'naver'),
     verifyUrlAndCaptureScreenshot(geminiApiKey, sanitized.youtubeSearchUrl, sanitized.exactTopicKeyword, 'youtube'),
     verifyUrlAndCaptureScreenshot(geminiApiKey, sanitized.coupangSearchUrl, sanitized.exactProductKeyword, 'coupang'),
@@ -131,8 +133,8 @@ async function runTrendPipeline() {
   );
   console.log(`📄 작성된 초안 제목: "${initialPost.title}"`);
 
-  // --- 4단계: 15인 트렌드/바이럴 에이전트 최소 2회+80점 돌파 감수 및 리라이팅 ---
-  console.log('\n[4단계] 15인의 바이럴/트렌드 전문가 감수 루프 실행 (최소 2회 + 80점 돌파제)...');
+  // --- 4단계: 16인 트렌드/바이럴 에이전트 최소 2회+80점 돌파 감수 및 리라이팅 ---
+  console.log('\n[4단계] 16인의 바이럴/트렌드 전문가 감수 루프 실행 (최소 2회 + 80점 돌파제)...');
   const { finalPost, reviewSummary } = await executeTwoRoundTrendReviewLoop(geminiApiKey, initialPost, topic);
 
   // --- 4.5단계: 본문 최종 HTML 내 모든 링크 전수 감사 및 오탈자/이미지/더미요소 자동 교정 ---
@@ -144,6 +146,7 @@ async function runTrendPipeline() {
       naver: sanitized.naverSearchUrl,
       naverMap: sanitized.naverMapUrl,
       coupang: sanitized.coupangSearchUrl,
+      officialLandingUrl: sanitized.officialLandingUrl,
     },
     sanitized.exactTopicKeyword,
     topic.category

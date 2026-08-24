@@ -3,7 +3,68 @@ import { VerifiedLink, TrendTopic } from './types.js';
 import { generateContentWithFallback, safeJsonParse } from './model-resolver.js';
 
 /**
- * 1. 정확한 표준 표기법 및 모바일 최적화 검색어 정제기 (오탈자 원천 차단)
+ * 1. 공식 오피셜 웹사이트 및 최적 다이렉트 랜딩 URL 발굴기
+ * (단순 네이버/구글 검색결과 대신 국립박물관 뮷즈몰, 브랜드 공식 공지, 공식 예약처 발굴)
+ */
+export async function findOfficialOrBestLandingUrl(
+  apiKey: string,
+  topic: TrendTopic
+): Promise<{
+  officialSiteName: string;
+  officialUrl: string;
+  isDirectLink: boolean;
+}> {
+  const ai = new GoogleGenAI({ apiKey });
+  const prompt = `당신은 대한민국 디지털 아카이브 및 공식 웹사이트 발굴 전문가입니다.
+현재 다루려는 트렌드 주제: "${topic.keyword}" (카테고리: ${topic.categoryNameKo})
+
+[지침]
+1. 단순 네이버/구글 포털 검색결과 페이지가 아니라, 독자가 가장 신뢰할 수 있고 직접 상품 구매/예약/정보를 확인할 수 있는 **공식 웹사이트(오피셜 몰, 브랜드 공식 홈페이지, 정부/공공기관, 공식 예약처)**가 있는지 판단하세요.
+   - 예: '국새 키링' -> 공식처: '국립박물관 문화재단 뮷즈(MU:DS) 공식몰' (URL: 'https://www.museumshop.or.kr')
+   - 예: '신라면 팝업' -> 공식처: '농심 공식 홈페이지/캐치테이블' (URL: 'https://www.nongshim.com')
+   - 예: '삐끼삐끼/야구' -> 공식처: 'KBO 마켓 공식몰' (URL: 'https://www.kbomarket.com')
+   - 예: '다이소 꿀템' -> 공식처: '다이소몰 공식 홈페이지' (URL: 'https://www.daisomall.co.kr')
+   - 예: '올리브영 꿀템' -> 공식처: '올리브영 공식 온라인몰' (URL: 'https://www.oliveyoung.co.kr')
+2. 만약 특정 공식 단일 웹사이트가 없는 일반 시사/밈 이슈인 경우, 가장 공신력 있는 공식 뉴스/유튜브 채널 또는 네이버 플레이스 공식 지도 링크를 추천하세요.
+
+반드시 다음 JSON 형식으로만 응답하세요:
+{
+  "officialSiteName": "공식 기관/브랜드/예약처 명칭 (예: 국립박물관 뮷즈 공식몰)",
+  "officialUrl": "https://...",
+  "isDirectLink": true
+}`;
+
+  try {
+    const res = await generateContentWithFallback(ai, {
+      contents: prompt,
+      config: { responseMimeType: 'application/json', temperature: 0.1 },
+    });
+
+    const parsed = safeJsonParse<{ officialSiteName: string; officialUrl: string; isDirectLink: boolean }>(
+      res.text || '{}',
+      {
+        officialSiteName: `${topic.keyword} 공식 정보처`,
+        officialUrl: `https://m.search.naver.com/search.naver?query=${encodeURIComponent(topic.keyword)}`,
+        isDirectLink: false,
+      }
+    );
+
+    return {
+      officialSiteName: parsed.officialSiteName || `${topic.keyword} 공식 정보처`,
+      officialUrl: parsed.officialUrl && parsed.officialUrl.startsWith('http') ? parsed.officialUrl : `https://m.search.naver.com/search.naver?query=${encodeURIComponent(topic.keyword)}`,
+      isDirectLink: parsed.isDirectLink ?? false,
+    };
+  } catch {
+    return {
+      officialSiteName: `${topic.keyword} 공식 정보처`,
+      officialUrl: `https://m.search.naver.com/search.naver?query=${encodeURIComponent(topic.keyword)}`,
+      isDirectLink: false,
+    };
+  }
+}
+
+/**
+ * 2. 정확한 표준 표기법 및 모바일 최적화 검색어 정제기 (오탈자 원천 차단)
  */
 export async function sanitizeSearchKeywords(
   apiKey: string,
@@ -15,6 +76,8 @@ export async function sanitizeSearchKeywords(
   naverSearchUrl: string;
   naverMapUrl: string;
   coupangSearchUrl: string;
+  officialSiteName: string;
+  officialLandingUrl: string;
 }> {
   const ai = new GoogleGenAI({ apiKey });
   const prompt = `당신은 대한민국 실시간 트렌드 및 키워드 표준 표기법 전문가입니다.
@@ -29,6 +92,8 @@ export async function sanitizeSearchKeywords(
   "exactTopicKeyword": "오탈자 없는 표준 키워드",
   "exactProductKeyword": "쿠팡 100% 검색 가능한 핵심 상품명"
 }`;
+
+  const officialInfo = await findOfficialOrBestLandingUrl(apiKey, topic);
 
   try {
     const res = await generateContentWithFallback(ai, {
@@ -54,6 +119,8 @@ export async function sanitizeSearchKeywords(
       naverSearchUrl: `https://m.search.naver.com/search.naver?query=${encodeURIComponent(exactTopic)}`,
       naverMapUrl: `https://m.map.naver.com/search2/search.naver?query=${encodeURIComponent(exactTopic)}`,
       coupangSearchUrl: `https://www.coupang.com/np/search?q=${encodeURIComponent(exactProduct)}`,
+      officialSiteName: officialInfo.officialSiteName,
+      officialLandingUrl: officialInfo.officialUrl,
     };
   } catch {
     const cleanKw = topic.keyword.replace(/[^\w가-힣\s]/g, '').trim();
@@ -64,12 +131,14 @@ export async function sanitizeSearchKeywords(
       naverSearchUrl: `https://m.search.naver.com/search.naver?query=${encodeURIComponent(topic.keyword)}`,
       naverMapUrl: `https://m.map.naver.com/search2/search.naver?query=${encodeURIComponent(topic.keyword)}`,
       coupangSearchUrl: `https://www.coupang.com/np/search?q=${encodeURIComponent(cleanKw)}`,
+      officialSiteName: officialInfo.officialSiteName,
+      officialLandingUrl: officialInfo.officialUrl,
     };
   }
 }
 
 /**
- * 2. Playwright를 활용하여 URL 실제 접속 ➔ 스크린샷 캡처 ➔ Gemini Vision으로 일치성 및 무결성 팩트체크
+ * 3. Playwright를 활용하여 URL 실제 접속 ➔ 스크린샷 캡처 ➔ Gemini Vision으로 일치성 및 무결성 팩트체크
  */
 export async function verifyUrlAndCaptureScreenshot(
   apiKey: string,
@@ -77,7 +146,7 @@ export async function verifyUrlAndCaptureScreenshot(
   expectedTopicKeyword: string,
   platformType: 'youtube' | 'naver' | 'coupang' | 'general' = 'general'
 ): Promise<VerifiedLink> {
-  console.log(`🔍 [링크 & 스크린샷 검증] ${platformType.toUpperCase()} 접속 검증: ${targetUrl}`);
+  console.log(`🔍 [랜딩 & 스크린샷 검증] ${platformType.toUpperCase()} 접속 검증: ${targetUrl}`);
 
   let status = 200;
   let pageTitle = '';
@@ -211,11 +280,11 @@ export async function verifyUrlAndCaptureScreenshot(
 }
 
 /**
- * 3. 본문 작성 후 최종 HTML 내 불필요한 더미 박스 100% 제거 및 Akamai WAF 방어선(ReferrerPolicy) 완비
+ * 4. 본문 작성 후 최종 HTML 내 불필요한 더미 박스 100% 제거 및 Akamai WAF 방어선(ReferrerPolicy) 완비
  */
 export function auditAndFixHtmlLinks(
   htmlContent: string,
-  validUrls: { youtube: string; naver: string; naverMap: string; coupang: string },
+  validUrls: { youtube: string; naver: string; naverMap: string; coupang: string; officialLandingUrl?: string },
   exactKeyword: string,
   category: string = 'HOT_PLACE'
 ): string {
@@ -242,10 +311,9 @@ export function auditAndFixHtmlLinks(
   // 5. 잘못된 유튜브 검색 링크 교정
   fixedHtml = fixedHtml.replace(/href=['"]https:\/\/www\.youtube\.com\/results\?search_query=[^'"]*['"]/g, `href="${validUrls.youtube}"`);
 
-  // 6. 모든 외부 링크에 target="_blank" rel="noreferrer noopener" referrerpolicy="no-referrer" 부여 (쿠팡 WAF 리퍼러 차단 원천 해결)
+  // 6. 모든 외부 링크에 target="_blank" rel="noreferrer noopener" referrerpolicy="no-referrer" 부여
   fixedHtml = fixedHtml.replace(/<a\s+([^>]*?)>/gi, (match, attrs) => {
     let cleanAttrs = attrs;
-    // 기존 target/rel/referrerpolicy 제거 후 재부여
     cleanAttrs = cleanAttrs.replace(/\s*(target|rel|referrerpolicy)=['"][^'"]*['"]/gi, '');
     return `<a ${cleanAttrs} target="_blank" rel="noreferrer noopener" referrerpolicy="no-referrer">`;
   });
