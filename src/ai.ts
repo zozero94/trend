@@ -31,12 +31,15 @@ export async function generateInitialTrendPost(
    - 도입부에 부드러운 파스텔톤의 3줄 핵심 요약 콜아웃 박스 필수 배치.
 3. **카테고리별 특화 필수 구성**:
    - **HOT_PLACE (맛집/핫플)**:
-     - 도로명 주소, 영업시간, 주차 팁, 대표 메뉴 가격표(Table), 웨이팅 피하는 시간대, 솔직한 호불호 평가.
+     - 도로명 주소, 네이버 지도 검색 바로가기 링크(https://m.map.naver.com/search2/search.naver?query=[장소명]), 영업시간, 주차 팁, 대표 메뉴 가격표(Table), 웨이팅 피하는 시간대, 솔직한 호불호 평가.
    - **SHOPPING_ITEM (바이럴 꿀템/쇼핑)**:
      - 제품 스펙/가격표, 바이럴 이유, ★솔직한 단점 및 아쉬운 점, 강력 추천 대상 vs 비추천 대상, 쿠팡 파트너스 CTA 배너.
    - **MEME_TREND (화제의 밈/이슈)**:
      - 밈의 원본 출처 및 유래, 정확한 뜻과 맥락, 상황별 찰진 사용 예시, 패러디 반응.
-4. **쿠팡 파트너스 CTA 배너 (${topic.category === 'SHOPPING_ITEM' ? '필수 포함' : '해당시 포함'})**:
+4. **🚫 절대 금지 항목**:
+   - 텍스트 형태의 '📸 [이미지: ...]' 더미 플레이스홀더 텍스트 절대 작성 금지 (실제 시스템에서 고화질 이미지를 자동 삽입함).
+   - '단톡방 공유용 카톡 템플릿' 같은 가짜 노란색 공유 박스 절대 작성 금지.
+5. **쿠팡 파트너스 CTA 배너 (${topic.category === 'SHOPPING_ITEM' ? '필수 포함' : '해당시 포함'})**:
    - 쇼핑/아이템 연관 주제인 경우 본문 하단에 반드시 세련된 CTA 버튼과 공정위 필수 문구를 삽입하세요:
    \`<div style="margin: 32px 0; padding: 24px; background: #fff5f5; border-radius: 12px; border: 1px solid #ffd8d8; text-align: center;"><a href="${coupangSearchUrl}" target="_blank" rel="noopener noreferrer" style="display: inline-block; padding: 14px 28px; background: #e60012; color: #ffffff !important; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; box-shadow: 0 4px 12px rgba(230,0,18,0.25);">🔥 [${topic.keyword}] 최저가 & 실시간 재고 확인하기 &rarr;</a><p style="font-size: 11px; color: #888888; margin-top: 12px; margin-bottom: 0;">이 포스팅은 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다. (추천인: ${coupangPartnersId})</p></div>\`
 

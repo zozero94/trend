@@ -1,6 +1,7 @@
 import { GoogleGenAI } from '@google/genai';
 import { VerifiedLink, TrendTopic } from './types.js';
 import { generateContentWithFallback, safeJsonParse } from './model-resolver.js';
+import { getTopicImageUrl } from './image-provider.js';
 
 /**
  * 1. 정확한 표준 표기법 및 플랫폼별 최적 검색어 정제기 (오탈자 원천 차단)
@@ -13,6 +14,7 @@ export async function sanitizeSearchKeywords(
   exactProductKeyword: string;
   youtubeSearchUrl: string;
   naverSearchUrl: string;
+  naverMapUrl: string;
   coupangSearchUrl: string;
 }> {
   const ai = new GoogleGenAI({ apiKey });
@@ -51,6 +53,7 @@ export async function sanitizeSearchKeywords(
       exactProductKeyword: exactProduct,
       youtubeSearchUrl: `https://www.youtube.com/results?search_query=${encodeURIComponent(exactTopic)}`,
       naverSearchUrl: `https://m.search.naver.com/search.naver?query=${encodeURIComponent(exactTopic)}`,
+      naverMapUrl: `https://m.map.naver.com/search2/search.naver?query=${encodeURIComponent(exactTopic)}`,
       coupangSearchUrl: `https://www.coupang.com/np/search?q=${encodeURIComponent(exactProduct)}`,
     };
   } catch {
@@ -60,6 +63,7 @@ export async function sanitizeSearchKeywords(
       exactProductKeyword: cleanKw,
       youtubeSearchUrl: `https://www.youtube.com/results?search_query=${encodeURIComponent(topic.keyword)}`,
       naverSearchUrl: `https://m.search.naver.com/search.naver?query=${encodeURIComponent(topic.keyword)}`,
+      naverMapUrl: `https://m.map.naver.com/search2/search.naver?query=${encodeURIComponent(topic.keyword)}`,
       coupangSearchUrl: `https://www.coupang.com/np/search?q=${encodeURIComponent(cleanKw)}`,
     };
   }
@@ -101,7 +105,7 @@ export async function verifyUrlAndCaptureScreenshot(
     status = response ? response.status() : 200;
     pageTitle = (await page.title()) || '';
 
-    // 쿠팡/유튜브 화면 렌더링 대기
+    // 화면 렌더링 대기
     await page.waitForTimeout(1000);
 
     const screenshotBuffer = await page.screenshot({ type: 'jpeg', quality: 80 });
@@ -209,22 +213,42 @@ export async function verifyUrlAndCaptureScreenshot(
 }
 
 /**
- * 3. 본문 작성 후 최종 HTML 안의 모든 링크 전수 감사 및 오탈자 자동 교정
+ * 3. 본문 작성 후 최종 HTML 안의 모든 링크 전수 감사 및 오탈자/이미지/더미요소 자동 교정
  */
 export function auditAndFixHtmlLinks(
   htmlContent: string,
-  validUrls: { youtube: string; naver: string; coupang: string },
-  exactKeyword: string
+  validUrls: { youtube: string; naver: string; naverMap: string; coupang: string },
+  exactKeyword: string,
+  category: string = 'HOT_PLACE'
 ): string {
   let fixedHtml = htmlContent;
 
-  // 1. 잘못된 쿠팡 링크가 있거나 오탈자가 있을 경우 정제된 쿠팡 URL로 교정 (따옴표 종류 무관)
+  // 1. 단톡방 공유용 카톡 템플릿 더미 노란 박스 100% 완전 삭제
+  fixedHtml = fixedHtml.replace(/<div[^>]*>[\s\S]*?단톡방 공유용 카톡 템플릿[\s\S]*?<\/div>/gi, '');
+  fixedHtml = fixedHtml.replace(/<div[^>]*>[\s\S]*?친구에게 공유하고 약속 잡기[\s\S]*?<\/div>/gi, '');
+
+  // 2. 텍스트 이미지 플레이스홀더 ➔ 실제 반응형 고화질 이미지로 교체
+  const topicImage = getTopicImageUrl(exactKeyword, category);
+  const realImageHtml = `
+  <div style="margin: 28px 0; text-align: center;">
+    <img src="${topicImage.url}" alt="${topicImage.alt}" style="width: 100%; max-width: 700px; height: auto; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); object-fit: cover; aspect-ratio: 16/9;" loading="lazy" />
+    <p style="font-size: 12px; color: #8b95a1; margin-top: 8px; margin-bottom: 0;">▲ ${exactKeyword} 관련 현장 비주얼</p>
+  </div>`;
+
+  fixedHtml = fixedHtml.replace(/<div[^>]*>[\s\S]*?📸\s*\[이미지:[\s\S]*?<\/div>/gi, realImageHtml);
+  fixedHtml = fixedHtml.replace(/📸\s*\[이미지:[^\]]*\]/gi, realImageHtml);
+
+  // 3. 잘못된 네이버 지도 링크 ➔ 정확한 장소 검색 네이버 지도 URL로 교정
+  fixedHtml = fixedHtml.replace(/href=['"]https:\/\/map\.naver\.com\/?['"]/g, `href="${validUrls.naverMap}"`);
+  fixedHtml = fixedHtml.replace(/href=['"]https:\/\/m\.map\.naver\.com\/?['"]/g, `href="${validUrls.naverMap}"`);
+
+  // 4. 잘못된 쿠팡 링크 ➔ 정제된 깔끔한 쿠팡 URL로 교정
   fixedHtml = fixedHtml.replace(/href=['"]https:\/\/www\.coupang\.com\/[^'"]*['"]/g, `href="${validUrls.coupang}"`);
 
-  // 2. 잘못된 유튜브 검색 링크 교정 (따옴표 종류 무관)
+  // 5. 잘못된 유튜브 검색 링크 교정
   fixedHtml = fixedHtml.replace(/href=['"]https:\/\/www\.youtube\.com\/results\?search_query=[^'"]*['"]/g, `href="${validUrls.youtube}"`);
 
-  // 3. <a> 태그에 target="_blank" rel="noopener noreferrer" 속성 강제 부여
+  // 6. <a> 태그에 target="_blank" rel="noopener noreferrer" 속성 강제 부여
   fixedHtml = fixedHtml.replace(/<a\s+(?!.*?target=)([^>]+)>/g, '<a target="_blank" rel="noopener noreferrer" $1>');
 
   return fixedHtml;

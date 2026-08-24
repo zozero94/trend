@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { BloggerClient } from '../src/blogger.js';
+import { auditAndFixHtmlLinks } from '../src/verifier.js';
 
 async function main() {
   const blogger = new BloggerClient(
@@ -12,10 +13,14 @@ async function main() {
   const postId = '3345858965161476618';
   const post = await blogger.getPost(postId);
 
-  let updatedContent = post.content.replace(
-    /href=['"]https:\/\/www\.coupang\.com\/np\/search\?component=&q=%EC%8B%A0%EB%9D%BC%EB%A9%B4&channel=user['"]/g,
-    `href="https://www.coupang.com/np/search?q=%EC%8B%A0%EB%9D%BC%EB%A9%B4"`
-  );
+  const validUrls = {
+    youtube: `https://www.youtube.com/results?search_query=${encodeURIComponent('신라면 팝업스토어')}`,
+    naver: `https://m.search.naver.com/search.naver?query=${encodeURIComponent('성수동 신라면 분식')}`,
+    naverMap: `https://m.map.naver.com/search2/search.naver?query=${encodeURIComponent('성수동 신라면 분식')}`,
+    coupang: `https://www.coupang.com/np/search?q=${encodeURIComponent('신라면')}`,
+  };
+
+  let cleanContent = auditAndFixHtmlLinks(post.content, validUrls, '성수동 신라면 분식', 'HOT_PLACE');
 
   // Update post in Blogger
   const token = await (blogger as any).getAccessToken();
@@ -30,13 +35,13 @@ async function main() {
     body: JSON.stringify({
       id: postId,
       title: post.title,
-      content: updatedContent,
+      content: cleanContent,
       labels: post.labels,
     }),
   });
 
   if (res.ok) {
-    console.log('✅ Draft post Coupang URL updated successfully!');
+    console.log('✅ Post 3345858965161476618 updated with real image, fixed map link, and removed kakao dummy box!');
   } else {
     console.error('Update failed:', await res.text());
   }

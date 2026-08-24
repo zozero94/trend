@@ -135,18 +135,20 @@ async function runTrendPipeline() {
   console.log('\n[4단계] 10인의 바이럴/트렌드 전문가 감수 루프 실행...');
   const { finalPost, reviewSummary } = await executeTwoRoundTrendReviewLoop(geminiApiKey, initialPost, topic);
 
-  // --- 4.5단계: 본문 최종 HTML 내 모든 링크 전수 감사 및 오탈자 자동 교정 ---
-  console.log('\n[4.5단계] 본문 HTML 내 모든 하이퍼링크 무결성 전수 감사 및 교정...');
+  // --- 4.5단계: 본문 최종 HTML 내 모든 링크 전수 감사 및 오탈자/이미지/더미요소 자동 교정 ---
+  console.log('\n[4.5단계] 본문 HTML 내 모든 하이퍼링크 무결성 전수 감사 및 미디어 교정...');
   finalPost.htmlContent = auditAndFixHtmlLinks(
     finalPost.htmlContent,
     {
       youtube: sanitized.youtubeSearchUrl,
       naver: sanitized.naverSearchUrl,
+      naverMap: sanitized.naverMapUrl,
       coupang: sanitized.coupangSearchUrl,
     },
-    sanitized.exactTopicKeyword
+    sanitized.exactTopicKeyword,
+    topic.category
   );
-  console.log(`✨ 최종 리라이팅 및 링크 무결성 검증 완성: "${finalPost.title}"`);
+  console.log(`✨ 최종 리라이팅 및 링크/미디어 무결성 검증 완성: "${finalPost.title}"`);
 
   // --- 5단계: 구글 블로거 2호점에 Draft 등록 ---
   const isDryRun = process.argv.includes('--dry-run');

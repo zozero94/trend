@@ -12,7 +12,7 @@ export const TREND_REVIEWER_AGENTS = [
   { id: 'mobile_ux', name: '3초 숏폼 모바일 UI/UX 디자이너', role: '스마트폰 한 손 스크롤 최적화 (2~3문장 문단, 요약 박스, 비교표) 검증' },
   { id: 'search_seo', name: '네이버/구글 검색 SEO 엔지니어', role: '실시간 급상승 연관 키워드 태그 및 본문 내 자연스러운 키워드 밀도 검증' },
   { id: 'price_hunter', name: '가성비 & 최저가 헌터', role: '정가 대비 가성비 분석 및 실질적인 혜택/최저가 팁 포함 여부 검증' },
-  { id: 'viral_sharer', name: '바이럴 단톡방 공유 유도관', role: '친구/연인에게 단톡방으로 즉시 공유하고 싶어지는 킬러 포인트 검증' },
+  { id: 'link_visual', name: '링크 무결성 & 비주얼 감수관', role: '네이버 지도 검색 링크의 정확성, 더미 텍스트 배제 및 고품질 미디어 무결성 검증' },
 ];
 
 /**
