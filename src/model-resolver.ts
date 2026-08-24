@@ -4,12 +4,13 @@ import { GoogleGenAI } from '@google/genai';
  * 2026 최신 Gemini 공식 가용 모델 우선순위 풀
  */
 export const CANDIDATE_MODELS = [
-  'gemini-3.7-flash',
   'gemini-3.6-flash',
   'gemini-3.5-flash',
   'gemini-3.1-flash-lite',
+  'gemini-3.5-flash-lite',
+  'gemini-flash-lite-latest',
   'gemini-flash-latest',
-  'gemini-2.5-pro',
+  'gemini-3.7-flash',
   'gemini-pro-latest',
 ];
 
@@ -37,32 +38,14 @@ export async function generateContentWithFallback(
       return response;
     } catch (err: any) {
       lastError = err;
-      const isRetryable =
-        err?.status === 503 ||
-        err?.message?.includes('503') ||
-        err?.status === 500 ||
-        err?.message?.includes('500') ||
-        err?.status === 502 ||
-        err?.message?.includes('502') ||
-        err?.message?.includes('high demand') ||
-        err?.status === 429 ||
-        err?.message?.includes('429') ||
-        err?.status === 404 ||
-        err?.message?.includes('RESOURCE_EXHAUSTED') ||
-        err?.message?.includes('fetch failed') ||
-        err?.message?.includes('ECONNRESET') ||
-        err?.message?.includes('ETIMEDOUT');
-
-      if (isRetryable) {
-        console.warn(`[Gemini] 모델 ${modelName} 호출 실패 (${err?.message?.slice(0, 80)}) -> 다음 가용 모델로 자동 전환 중...`);
-        await new Promise((r) => setTimeout(r, 1000));
-        continue;
-      }
-      throw err;
+      const errMsg = err?.message || String(err);
+      console.warn(`⚠️ [Gemini Fallback] 모델 "${modelName}" 호출 실패 (${err?.status || err?.name || ''}: ${errMsg.slice(0, 100)}) -> 다음 가용 모델로 즉시 전환 중...`);
+      await new Promise((r) => setTimeout(r, 1200));
+      continue;
     }
   }
 
-  throw new Error(`[Gemini] 모든 가용 모델 호출 실패. 마지막 오류: ${lastError?.message || lastError}`);
+  throw new Error(`[Gemini] 8종 전체 가용 모델 호출 실패. 마지막 오류: ${lastError?.message || lastError}`);
 }
 
 export function safeJsonParse<T>(rawText: string, fallback: T): T {
