@@ -277,8 +277,15 @@ export async function verifyUrlAndCaptureScreenshot(
     verificationNotes = verificationNotes || `비정상 HTTP 응답 코드: ${status}`;
   }
 
+  let linkType: 'DIRECT_OFFICIAL' | 'VERIFIED_SEARCH' | 'MAP_PLACE' | 'PURCHASE_CTA' = 'VERIFIED_SEARCH';
+  if (platformType === 'general') {
+    linkType = isHealthy && isContentMatched && relevanceScore >= 75 ? 'DIRECT_OFFICIAL' : 'VERIFIED_SEARCH';
+  } else if (platformType === 'coupang') {
+    linkType = 'PURCHASE_CTA';
+  }
+
   const resultStatusIcon = isHealthy && isContentMatched && relevanceScore >= 70 ? '✅ 통과' : '⚠️ 주의/불일치';
-  console.log(`   └ [${platformType.toUpperCase()} 검증] ${resultStatusIcon} (${relevanceScore}점) - ${verificationNotes}`);
+  console.log(`   └ [${platformType.toUpperCase()} 검증] ${resultStatusIcon} (${relevanceScore}점 | ${linkType}) - ${verificationNotes}`);
 
   return {
     originalUrl: targetUrl,
@@ -291,6 +298,7 @@ export async function verifyUrlAndCaptureScreenshot(
     relevanceScore,
     suggestedCorrection,
     verificationNotes,
+    linkType,
   };
 }
 

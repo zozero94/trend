@@ -11,10 +11,19 @@ export async function generateInitialTrendPost(
 ): Promise<TrendPost> {
   const ai = new GoogleGenAI({ apiKey });
 
+  const officialLink = verifiedLinks.find((v) => v.linkType === 'DIRECT_OFFICIAL');
+  const isDirectOfficial = !!officialLink;
+  const officialUrl = officialLink?.finalUrl || `https://m.search.naver.com/search.naver?query=${encodeURIComponent(topic.keyword)}`;
+  const officialSiteTitle = isDirectOfficial ? '🏛️ 공식 오피셜 바로가기' : '🔍 실시간 입고 & 최저가 검색';
+  const officialCardDescription = isDirectOfficial
+    ? '공식몰, 공식 예약 사이트 및 상세 공지를 바로 확인하세요.'
+    : '국내 공식 판매처가 한정되어 있어 실시간 입고 현황 및 스마트스토어 검색을 확인하세요.';
+  const officialButtonText = isDirectOfficial ? '공식 바로가기 &rarr;' : '실시간 정보 확인 &rarr;';
+
   const verifiedLinksSummary = verifiedLinks
     .map(
       (v, i) =>
-        `[링크 ${i + 1}] URL: ${v.originalUrl} | 페이지명: ${v.pageTitle} | 상태: ${v.isHealthy ? '정상(200)' : '에러'} | 검증: ${v.verificationNotes}`
+        `[링크 ${i + 1}] 종류: ${v.linkType || '검색'} | URL: ${v.finalUrl || v.originalUrl} | 페이지명: ${v.pageTitle} | 상태: ${v.isHealthy ? '정상' : '검색대체'} | 검증: ${v.verificationNotes}`
     )
     .join('\n');
 
@@ -37,7 +46,7 @@ export async function generateInitialTrendPost(
 [★ 16인 감수단 사전 통과 체크리스트 — 누락 시 감점되는 필수 요소]
 □ 제목: 숫자/구체 키워드 + 궁금증 유발 장치 (없으면 헤드라인 마스터 각 -3점), 낚시 금지, 브랜드/밈 오탈자 1건당 -4점
 □ 3줄 핵심 요약 콜아웃 박스 (누락 시 모바일 UX 위원 -3점)
-□ 🏛️ 공식 오피셜 직통 카드 (누락 시 오피셜 최적화관 -4점)
+□ 🏛️ 오피셜/검색 바로가기 카드 (누락 시 오피셜 최적화관 -4점)
 □ 내돈내산 치명적 단점/호불호 문단 + "이런 사람에겐 비추천" 명시 (단점 문단 누락 시 솔직 리뷰어 -6점)
 □ FAQ 3선 — 검색어형 질문 + 수치/날짜/장소가 담긴 팩트 답변 (누락 시 FAQ 설계관 -5점)
 □ 모든 문단 2~3문장 (4문장 이상 문단 1개라도 존재 시 UX 위원 -6점)
@@ -47,6 +56,7 @@ export async function generateInitialTrendPost(
 □ 쇼핑 주제: 쿠팡 CTA 배너(-4점) + 공정위 파트너스 고지 문구(누락 시 컴플라이언스 -6점)
 □ 도입 3문장 내 끝까지 읽을 이유 예고 + 섹션 간 브릿지 문장 + 결말 꿀팁 보상 (체류시간 부스터 각 -2~3점)
 □ 사전 검증된 링크 목록의 URL만 사용 — 새 URL 임의 창작 시 랜딩 팩트체커 1건당 -4점
+□ ${isDirectOfficial ? '공식 직영몰/예약처가 확인되었으므로 "공식 사이트에서 확인하세요"라고 정확히 서술' : '공식 직영몰이 부재하여 검색 링크로 대체되었으므로 "공식몰"이라는 허위 서술 금지, "실시간 입고 및 최저가 검색"으로 본문 서술'}
 □ 근거 없는 최상급 표현("인생템", "무조건 사세요") 및 일방적 찬양 톤 금지 (악취 필터링관 감점)
 □ [이미지: ...] 등 더미 텍스트 1개라도 존재 시 더미 감수관 즉시 1점 처리
 
@@ -62,14 +72,14 @@ export async function generateInitialTrendPost(
        <strong style="color: #1e40af; font-size: 15px;">⚡ 3줄 핵심 요약</strong>
        <ul style="margin: 8px 0 0 0; padding-left: 18px; font-size: 14.5px; color: #1e293b;">...</ul>
      </div>
-3. **🏛️ 공식 판매처 / 예약처 / 오피셜 직통 배너 (필수 삽입)**:
-   - 본문 상단에 독자가 바로 예약/구매/공지 확인을 할 수 있는 공식 직통 카드를 삽입하세요:
+3. **🏛️ 바로가기 배너 카드 (필수 삽입)**:
+   - 본문 상단에 독자가 바로 확인을 할 수 있는 카드를 삽입하세요:
      <div style="background: #f1f5f9; border: 1.5px solid #cbd5e1; border-radius: 10px; padding: 14px 18px; margin: 20px 0; display: flex; align-items: center; justify-content: space-between;">
        <div>
-         <strong style="color: #0f172a; font-size: 14px;">🏛️ 공식 오피셜 바로가기</strong>
-         <p style="margin: 3px 0 0 0; font-size: 12.5px; color: #64748b;">공식몰, 예약 사이트 및 상세 공지를 바로 확인하세요.</p>
+         <strong style="color: #0f172a; font-size: 14px;">${officialSiteTitle}</strong>
+         <p style="margin: 3px 0 0 0; font-size: 12.5px; color: #64748b;">${officialCardDescription}</p>
        </div>
-       <a href="https://m.search.naver.com/search.naver?query=${encodeURIComponent(topic.keyword)}" target="_blank" rel="noreferrer noopener" referrerpolicy="no-referrer" style="display: inline-block; background: #0f172a; color: #ffffff !important; padding: 8px 14px; border-radius: 6px; font-size: 13px; font-weight: 700; text-decoration: none; white-space: nowrap;">공식 바로가기 &rarr;</a>
+       <a href="${officialUrl}" target="_blank" rel="noreferrer noopener" referrerpolicy="no-referrer" style="display: inline-block; background: #0f172a; color: #ffffff !important; padding: 8px 14px; border-radius: 6px; font-size: 13px; font-weight: 700; text-decoration: none; white-space: nowrap;">${officialButtonText}</a>
      </div>
 4. **★ 내돈내산 솔직 단점 & 아쉬운 점 (1문단 필수 작성)**:
    - 무조건적인 찬양글은 절대 금지! 실제 구매자/방문자의 솔직한 호불호, 웨이팅 고충, 아쉬운 가성비나 단점을 1문단 이상 명확히 분석하세요.
