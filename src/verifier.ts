@@ -22,7 +22,7 @@ export async function sanitizeSearchKeywords(
 
 [지침]
 1. 'exactTopicKeyword': 삐끼삐끼, 두바이초콜릿, 성수 팝업처럼 릴스/유튜브/뉴스에서 널리 쓰이는 가장 정확한 공식 표준 표기 (오탈자 절대 금지).
-2. 'exactProductKeyword': 모바일/PC 쿠팡에서 검색했을 때 100% 정상 상품 목록이 나오는 가장 정확한 핵심 상품/명사 키워드 (예: '신라면', '두바이 초콜릿', '헤어롤', '텀블러').
+2. 'exactProductKeyword': 쿠팡에서 검색했을 때 100% 정상 상품 목록이 나오는 가장 정확한 핵심 상품/명사 키워드 (예: '신라면', '두바이 초콜릿', '헤어롤', '텀블러').
 
 반드시 다음 JSON 형식으로만 응답하세요:
 {
@@ -53,8 +53,7 @@ export async function sanitizeSearchKeywords(
       youtubeSearchUrl: `https://www.youtube.com/results?search_query=${encodeURIComponent(exactTopic)}`,
       naverSearchUrl: `https://m.search.naver.com/search.naver?query=${encodeURIComponent(exactTopic)}`,
       naverMapUrl: `https://m.map.naver.com/search2/search.naver?query=${encodeURIComponent(exactTopic)}`,
-      // 모바일 및 PC 브라우저/인앱 브라우저에서 모두 에러 없이 바로 열리는 모바일 웹/앱 통합 검색 URL
-      coupangSearchUrl: `https://m.coupang.com/nm/search?q=${encodeURIComponent(exactProduct)}`,
+      coupangSearchUrl: `https://www.coupang.com/np/search?q=${encodeURIComponent(exactProduct)}`,
     };
   } catch {
     const cleanKw = topic.keyword.replace(/[^\w가-힣\s]/g, '').trim();
@@ -64,7 +63,7 @@ export async function sanitizeSearchKeywords(
       youtubeSearchUrl: `https://www.youtube.com/results?search_query=${encodeURIComponent(topic.keyword)}`,
       naverSearchUrl: `https://m.search.naver.com/search.naver?query=${encodeURIComponent(topic.keyword)}`,
       naverMapUrl: `https://m.map.naver.com/search2/search.naver?query=${encodeURIComponent(topic.keyword)}`,
-      coupangSearchUrl: `https://m.coupang.com/nm/search?q=${encodeURIComponent(cleanKw)}`,
+      coupangSearchUrl: `https://www.coupang.com/np/search?q=${encodeURIComponent(cleanKw)}`,
     };
   }
 }
@@ -97,7 +96,7 @@ export async function verifyUrlAndCaptureScreenshot(
     const context = await browser.newContext({
       viewport: { width: 1280, height: 800 },
       userAgent:
-        'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     });
     const page = await context.newPage();
 
@@ -124,7 +123,7 @@ export async function verifyUrlAndCaptureScreenshot(
       const fetchRes = await fetch(targetUrl, {
         headers: {
           'User-Agent':
-            'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         },
       });
       status = fetchRes.status;
@@ -212,7 +211,7 @@ export async function verifyUrlAndCaptureScreenshot(
 }
 
 /**
- * 3. 본문 작성 후 최종 HTML 내 불필요한 더미 박스 100% 제거 및 모바일 링크 최적화
+ * 3. 본문 작성 후 최종 HTML 내 불필요한 더미 박스 100% 제거 및 Akamai WAF 방어선(ReferrerPolicy) 완비
  */
 export function auditAndFixHtmlLinks(
   htmlContent: string,
@@ -237,14 +236,19 @@ export function auditAndFixHtmlLinks(
   fixedHtml = fixedHtml.replace(/href=['"]https:\/\/map\.naver\.com\/?['"]/g, `href="${validUrls.naverMap}"`);
   fixedHtml = fixedHtml.replace(/href=['"]https:\/\/m\.map\.naver\.com\/?['"]/g, `href="${validUrls.naverMap}"`);
 
-  // 4. 모바일 친화형 쿠팡 링크로 통일 교정 (m.coupang.com)
+  // 4. 쿠팡 링크 WAF 차단(Incident Code D21752C_...) 방어: 표준 URL 교정 및 referrerpolicy="no-referrer" 부여
   fixedHtml = fixedHtml.replace(/href=['"]https:\/\/(?:www|m)\.coupang\.com\/[^'"]*['"]/g, `href="${validUrls.coupang}"`);
 
   // 5. 잘못된 유튜브 검색 링크 교정
   fixedHtml = fixedHtml.replace(/href=['"]https:\/\/www\.youtube\.com\/results\?search_query=[^'"]*['"]/g, `href="${validUrls.youtube}"`);
 
-  // 6. <a> 태그에 target="_blank" rel="noopener noreferrer" 속성 강제 부여
-  fixedHtml = fixedHtml.replace(/<a\s+(?!.*?target=)([^>]+)>/g, '<a target="_blank" rel="noopener noreferrer" $1>');
+  // 6. 모든 외부 링크에 target="_blank" rel="noreferrer noopener" referrerpolicy="no-referrer" 부여 (쿠팡 WAF 리퍼러 차단 원천 해결)
+  fixedHtml = fixedHtml.replace(/<a\s+([^>]*?)>/gi, (match, attrs) => {
+    let cleanAttrs = attrs;
+    // 기존 target/rel/referrerpolicy 제거 후 재부여
+    cleanAttrs = cleanAttrs.replace(/\s*(target|rel|referrerpolicy)=['"][^'"]*['"]/gi, '');
+    return `<a ${cleanAttrs} target="_blank" rel="noreferrer noopener" referrerpolicy="no-referrer">`;
+  });
 
   return fixedHtml.trim();
 }
