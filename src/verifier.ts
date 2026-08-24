@@ -1,36 +1,34 @@
 import { GoogleGenAI } from '@google/genai';
-import { VerifiedLink, TrendTopic } from './types.js';
+import { VerifiedLink, TrendCategory } from './types.js';
 import { generateContentWithFallback, safeJsonParse } from './model-resolver.js';
 
 /**
- * 1. 공식 오피셜 웹사이트 및 최적 다이렉트 랜딩 URL 발굴기
- * (단순 네이버/구글 검색결과 대신 국립박물관 뮷즈몰, 브랜드 공식 공지, 공식 예약처 발굴)
+ * 1. 공식 판매처 / 예약 링크 / 오피셜 직통 사이트 지능형 발굴기
  */
 export async function findOfficialOrBestLandingUrl(
   apiKey: string,
-  topic: TrendTopic
+  topicKeyword: string,
+  category: TrendCategory
 ): Promise<{
   officialSiteName: string;
-  officialUrl: string;
+  officialLandingUrl: string;
   isDirectLink: boolean;
 }> {
   const ai = new GoogleGenAI({ apiKey });
-  const prompt = `당신은 대한민국 디지털 아카이브 및 공식 웹사이트 발굴 전문가입니다.
-현재 다루려는 트렌드 주제: "${topic.keyword}" (카테고리: ${topic.categoryNameKo})
+  const prompt = `당신은 대한민국 최고의 웹 링크 & 공식 판매처 아카이브 전문가입니다.
+주제: "${topicKeyword}" (카테고리: ${category})
 
 [지침]
-1. 단순 네이버/구글 포털 검색결과 페이지가 아니라, 독자가 가장 신뢰할 수 있고 직접 상품 구매/예약/정보를 확인할 수 있는 **공식 웹사이트(오피셜 몰, 브랜드 공식 홈페이지, 정부/공공기관, 공식 예약처)**가 있는지 판단하세요.
-   - 예: '국새 키링' -> 공식처: '국립박물관 문화재단 뮷즈(MU:DS) 공식몰' (URL: 'https://www.museumshop.or.kr')
-   - 예: '신라면 팝업' -> 공식처: '농심 공식 홈페이지/캐치테이블' (URL: 'https://www.nongshim.com')
-   - 예: '삐끼삐끼/야구' -> 공식처: 'KBO 마켓 공식몰' (URL: 'https://www.kbomarket.com')
-   - 예: '다이소 꿀템' -> 공식처: '다이소몰 공식 홈페이지' (URL: 'https://www.daisomall.co.kr')
-   - 예: '올리브영 꿀템' -> 공식처: '올리브영 공식 온라인몰' (URL: 'https://www.oliveyoung.co.kr')
-2. 만약 특정 공식 단일 웹사이트가 없는 일반 시사/밈 이슈인 경우, 가장 공신력 있는 공식 뉴스/유튜브 채널 또는 네이버 플레이스 공식 지도 링크를 추천하세요.
+독자가 헛걸음하지 않고 곧바로 접속할 수 있는 **가장 신뢰할 수 있는 공식 다이렉트 웹사이트**를 발굴하세요.
+- 국립박물관 뮷즈/키링: 국립박물관 문화재단 뮷즈 공식몰 (https://www.museumshop.or.kr)
+- 팝업스토어/핫플: 카카오맵/네이버 지도 예약 페이지 또는 공식 인스타그램/캐치테이블
+- 브랜드 굿즈/신상: 해당 브랜드 공식 직영몰 또는 공식 프로모션 페이지
+- 공연/스포츠/이벤트: 인터파크 티켓 또는 공식 예매처
 
 반드시 다음 JSON 형식으로만 응답하세요:
 {
-  "officialSiteName": "공식 기관/브랜드/예약처 명칭 (예: 국립박물관 뮷즈 공식몰)",
-  "officialUrl": "https://...",
+  "officialSiteName": "공식몰/공식처 명칭 (예: 국립박물관 뮷즈 공식몰)",
+  "officialLandingUrl": "https://...",
   "isDirectLink": true
 }`;
 
@@ -39,102 +37,70 @@ export async function findOfficialOrBestLandingUrl(
       contents: prompt,
       config: { responseMimeType: 'application/json', temperature: 0.1 },
     });
-
-    const parsed = safeJsonParse<{ officialSiteName: string; officialUrl: string; isDirectLink: boolean }>(
+    const parsed = safeJsonParse<{ officialSiteName: string; officialLandingUrl: string; isDirectLink: boolean }>(
       res.text || '{}',
       {
-        officialSiteName: `${topic.keyword} 공식 정보처`,
-        officialUrl: `https://m.search.naver.com/search.naver?query=${encodeURIComponent(topic.keyword)}`,
+        officialSiteName: '공식 정보 검색',
+        officialLandingUrl: `https://m.search.naver.com/search.naver?query=${encodeURIComponent(topicKeyword)}`,
         isDirectLink: false,
       }
     );
-
     return {
-      officialSiteName: parsed.officialSiteName || `${topic.keyword} 공식 정보처`,
-      officialUrl: parsed.officialUrl && parsed.officialUrl.startsWith('http') ? parsed.officialUrl : `https://m.search.naver.com/search.naver?query=${encodeURIComponent(topic.keyword)}`,
+      officialSiteName: parsed.officialSiteName || '공식 정보 검색',
+      officialLandingUrl: parsed.officialLandingUrl && parsed.officialLandingUrl.startsWith('http')
+        ? parsed.officialLandingUrl
+        : `https://m.search.naver.com/search.naver?query=${encodeURIComponent(topicKeyword)}`,
       isDirectLink: parsed.isDirectLink ?? false,
     };
   } catch {
     return {
-      officialSiteName: `${topic.keyword} 공식 정보처`,
-      officialUrl: `https://m.search.naver.com/search.naver?query=${encodeURIComponent(topic.keyword)}`,
+      officialSiteName: '공식 정보 검색',
+      officialLandingUrl: `https://m.search.naver.com/search.naver?query=${encodeURIComponent(topicKeyword)}`,
       isDirectLink: false,
     };
   }
 }
 
 /**
- * 2. 정확한 표준 표기법 및 모바일 최적화 검색어 정제기 (오탈자 원천 차단)
+ * 2. 4대 핵심 검색/구매/지도 랜딩 URL 생성기
+ */
+export function buildVerifiedTrendUrls(
+  exactTopicKeyword: string,
+  exactProductKeyword: string,
+  officialLandingUrl?: string
+) {
+  const cleanKeyword = exactTopicKeyword.trim();
+  const cleanProduct = exactProductKeyword.trim();
+
+  return {
+    officialLandingUrl: officialLandingUrl || `https://m.search.naver.com/search.naver?query=${encodeURIComponent(cleanKeyword)}`,
+    naverSearchUrl: `https://m.search.naver.com/search.naver?query=${encodeURIComponent(cleanKeyword)}`,
+    youtubeSearchUrl: `https://www.youtube.com/results?search_query=${encodeURIComponent(cleanKeyword)}`,
+    naverMapUrl: `https://map.naver.com/v5/search/${encodeURIComponent(cleanKeyword)}`,
+    coupangSearchUrl: `https://www.coupang.com/np/search?q=${encodeURIComponent(cleanProduct)}`,
+  };
+}
+
+/**
+ * 2.5 표준 검색 키워드 및 랜딩 정보 산출
  */
 export async function sanitizeSearchKeywords(
   apiKey: string,
-  topic: TrendTopic
-): Promise<{
-  exactTopicKeyword: string;
-  exactProductKeyword: string;
-  youtubeSearchUrl: string;
-  naverSearchUrl: string;
-  naverMapUrl: string;
-  coupangSearchUrl: string;
-  officialSiteName: string;
-  officialLandingUrl: string;
-}> {
-  const ai = new GoogleGenAI({ apiKey });
-  const prompt = `당신은 대한민국 실시간 트렌드 및 키워드 표준 표기법 전문가입니다.
-현재 다루려는 주제 키워드: "${topic.keyword}" (카테고리: ${topic.categoryNameKo})
+  topic: { keyword: string; headlineHook: string; category: TrendCategory }
+) {
+  const officialInfo = await findOfficialOrBestLandingUrl(apiKey, topic.keyword, topic.category);
+  const urls = buildVerifiedTrendUrls(topic.keyword, topic.keyword, officialInfo.officialLandingUrl);
 
-[지침]
-1. 'exactTopicKeyword': 삐끼삐끼, 두바이초콜릿, 성수 팝업처럼 릴스/유튜브/뉴스에서 널리 쓰이는 가장 정확한 공식 표준 표기 (오탈자 절대 금지).
-2. 'exactProductKeyword': 쿠팡에서 검색했을 때 100% 정상 상품 목록이 나오는 가장 정확한 핵심 상품/명사 키워드 (예: '신라면', '두바이 초콜릿', '헤어롤', '텀블러').
-
-반드시 다음 JSON 형식으로만 응답하세요:
-{
-  "exactTopicKeyword": "오탈자 없는 표준 키워드",
-  "exactProductKeyword": "쿠팡 100% 검색 가능한 핵심 상품명"
-}`;
-
-  const officialInfo = await findOfficialOrBestLandingUrl(apiKey, topic);
-
-  try {
-    const res = await generateContentWithFallback(ai, {
-      contents: prompt,
-      config: { responseMimeType: 'application/json', temperature: 0.1 },
-    });
-
-    const parsed = safeJsonParse<{ exactTopicKeyword: string; exactProductKeyword: string }>(
-      res.text || '{}',
-      {
-        exactTopicKeyword: topic.keyword.trim(),
-        exactProductKeyword: topic.keyword.replace(/[^\w가-힣\s]/g, '').trim(),
-      }
-    );
-
-    const exactTopic = parsed.exactTopicKeyword || topic.keyword;
-    const exactProduct = parsed.exactProductKeyword || topic.keyword;
-
-    return {
-      exactTopicKeyword: exactTopic,
-      exactProductKeyword: exactProduct,
-      youtubeSearchUrl: `https://www.youtube.com/results?search_query=${encodeURIComponent(exactTopic)}`,
-      naverSearchUrl: `https://m.search.naver.com/search.naver?query=${encodeURIComponent(exactTopic)}`,
-      naverMapUrl: `https://m.map.naver.com/search2/search.naver?query=${encodeURIComponent(exactTopic)}`,
-      coupangSearchUrl: `https://www.coupang.com/np/search?q=${encodeURIComponent(exactProduct)}`,
-      officialSiteName: officialInfo.officialSiteName,
-      officialLandingUrl: officialInfo.officialUrl,
-    };
-  } catch {
-    const cleanKw = topic.keyword.replace(/[^\w가-힣\s]/g, '').trim();
-    return {
-      exactTopicKeyword: topic.keyword,
-      exactProductKeyword: cleanKw,
-      youtubeSearchUrl: `https://www.youtube.com/results?search_query=${encodeURIComponent(topic.keyword)}`,
-      naverSearchUrl: `https://m.search.naver.com/search.naver?query=${encodeURIComponent(topic.keyword)}`,
-      naverMapUrl: `https://m.map.naver.com/search2/search.naver?query=${encodeURIComponent(topic.keyword)}`,
-      coupangSearchUrl: `https://www.coupang.com/np/search?q=${encodeURIComponent(cleanKw)}`,
-      officialSiteName: officialInfo.officialSiteName,
-      officialLandingUrl: officialInfo.officialUrl,
-    };
-  }
+  return {
+    exactTopicKeyword: topic.keyword,
+    exactProductKeyword: topic.keyword,
+    officialSiteName: officialInfo.officialSiteName,
+    officialLandingUrl: officialInfo.officialLandingUrl,
+    naverSearchUrl: urls.naverSearchUrl,
+    youtubeSearchUrl: urls.youtubeSearchUrl,
+    naverMapUrl: urls.naverMapUrl,
+    coupangSearchUrl: urls.coupangSearchUrl,
+  };
 }
 
 /**
@@ -176,9 +142,6 @@ export async function verifyUrlAndCaptureScreenshot(
     status = response ? response.status() : 200;
     pageTitle = (await page.title()) || '';
 
-    await page.waitForTimeout(1000);
-
-    // DOM 내부 실제 텍스트 1500자 추출 (비전 분석과 크로스체크용)
     domText = await page.evaluate(() => {
       return document.body ? document.body.innerText.replace(/\s+/g, ' ').slice(0, 1500) : '';
     });
@@ -186,15 +149,8 @@ export async function verifyUrlAndCaptureScreenshot(
     const screenshotBuffer = await page.screenshot({ type: 'jpeg', quality: 85 });
     screenshotBase64 = screenshotBuffer.toString('base64');
     isHealthy = status >= 200 && status < 400;
-
-    await browser.close();
   } catch (browserError) {
     console.warn(`⚠️ [Verifier] Playwright 브라우저 캡처 실패, HTTP Fetch로 대체 검증:`, browserError);
-    if (browser) {
-      try {
-        await browser.close();
-      } catch (_) {}
-    }
 
     try {
       const fetchRes = await fetch(targetUrl, {
@@ -202,6 +158,7 @@ export async function verifyUrlAndCaptureScreenshot(
           'User-Agent':
             'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         },
+        signal: AbortSignal.timeout(8000),
       });
       status = fetchRes.status;
       isHealthy = fetchRes.ok;
@@ -214,12 +171,18 @@ export async function verifyUrlAndCaptureScreenshot(
       isHealthy = false;
       verificationNotes = 'URL 접근 실패 (네트워크 오류)';
     }
+  } finally {
+    if (browser) {
+      try {
+        await browser.close();
+      } catch (_) {}
+    }
   }
 
   if (isHealthy) {
     try {
       const ai = new GoogleGenAI({ apiKey });
-      const prompt = `당신은 대한민국 최고의 웹 랜딩 및 시각적 콘텐츠 일치성 감리관(Visual Link Auditor)입니다.
+      const prompt = `당신은 대한민국 최고의 웹 링크 & 시각 감리관(Visual Link Auditor)입니다.
 우리가 작성하려는 핵심 주제: "${expectedTopicKeyword}"
 검증 대상 URL: "${targetUrl}" (플랫폼: ${platformType})
 웹페이지 제목: "${pageTitle}"
@@ -227,17 +190,17 @@ export async function verifyUrlAndCaptureScreenshot(
 
 [정밀 시각 & 텍스트 검증 지침]
 첨부된 실제 웹페이지 스크린샷과 추출된 텍스트를 정밀 분석하여 다음을 판정하세요:
-1. **정상 랜딩 여부 (isHealthy)**: 404 에러, 403 차단(Akamai incident), "검색 결과가 없습니다", 성인 인증창, 로그인 차단 화면이면 false.
-2. **주제 일치성 (isContentMatched)**: 화면에 타겟 주제("${expectedTopicKeyword}")와 직접 관련된 상품, 영상, 지도, 공식 정보가 실제로 확실히 노출되고 있는지 여부 (엉뚱한 상품이나 전혀 다른 일반 단어가 나오면 false).
-3. **일치성 점수 (relevanceScore)**: 0~100점 (80점 이상이면 완벽 일치, 70점 미만은 불일치).
-4. **보정 제안 (suggestedCorrection)**: 불일치하거나 검색 결과가 0건인 경우, 대안이 될 더 정확한 검색어 또는 공식 URL 제안.
+1. **정상 랜딩 여부 (isHealthy)**: 404 에러, 403 차단, Akamai 차단(Incident Code 등), 빈 검색 결과, 로그인 차단 화면이면 false.
+2. **주제 일치성 (isContentMatched)**: 화면에 타겟 주제("${expectedTopicKeyword}")와 관련된 실제 콘텐츠나 상품이 확실히 노출되는지 판정.
+3. **일치성 점수 (relevanceScore)**: 0~100점 (80점 이상이면 통과, 70점 미만은 불일치).
+4. **보정 제안 (suggestedCorrection)**: 불일치 시 올바른 키워드나 대안 URL 제안.
 
 반드시 다음 JSON 포맷으로만 응답하세요:
 {
   "isHealthy": true,
   "isContentMatched": true,
   "relevanceScore": 95,
-  "suggestedCorrection": "대안 키워드 또는 빈문자열",
+  "suggestedCorrection": "",
   "verificationNotes": "검증 상세 사유 요약"
 }`;
 
@@ -332,13 +295,25 @@ export function auditAndFixHtmlLinks(
   fixedHtml = fixedHtml.replace(/href=['"]https:\/\/map\.naver\.com\/?['"]/g, `href="${validUrls.naverMap}"`);
   fixedHtml = fixedHtml.replace(/href=['"]https:\/\/m\.map\.naver\.com\/?['"]/g, `href="${validUrls.naverMap}"`);
 
-  // 4. 쿠팡 링크 WAF 차단(Incident Code D21752C_...) 방어: 표준 URL 교정 및 referrerpolicy="no-referrer" 부여
-  fixedHtml = fixedHtml.replace(/href=['"]https:\/\/(?:www|m)\.coupang\.com\/[^'"]*['"]/g, `href="${validUrls.coupang}"`);
+  // 4. 공식 직통 URL 치환 (존재 시)
+  if (validUrls.officialLandingUrl) {
+    fixedHtml = fixedHtml.replace(/href=['"]https?:\/\/(?:www\.)?(?:museumshop|official|smartstore|brand)[^'"]*['"]/gi, `href="${validUrls.officialLandingUrl}"`);
+  }
 
-  // 5. 잘못된 유튜브 검색 링크 교정
+  // 5. 쿠팡 링크 WAF 차단(Incident Code D21752C_...) 방어: 모든 변형(단축링크 포함) 교정
+  fixedHtml = fixedHtml.replace(
+    /href=['"]https:\/\/(?:(?:www|m)\.coupang\.com|link\.coupang\.com|coupa\.ng)\/[^'"]*['"]/gi,
+    `href="${validUrls.coupang}"`
+  );
+
+  // 6. 잘못된 유튜브 검색 링크 교정
   fixedHtml = fixedHtml.replace(/href=['"]https:\/\/www\.youtube\.com\/results\?search_query=[^'"]*['"]/g, `href="${validUrls.youtube}"`);
 
-  // 6. 모든 외부 링크에 target="_blank" rel="noreferrer noopener" referrerpolicy="no-referrer" 부여
+  // 7. XSS 인라인 이벤트 핸들러 및 javascript: 차단
+  fixedHtml = fixedHtml.replace(/\s*on\w+=["'][^"']*["']/gi, '');
+  fixedHtml = fixedHtml.replace(/href=["']javascript:[^"']*["']/gi, 'href="#"');
+
+  // 8. 모든 외부 링크에 target="_blank" rel="noreferrer noopener" referrerpolicy="no-referrer" 부여
   fixedHtml = fixedHtml.replace(/<a\s+([^>]*?)>/gi, (match, attrs) => {
     let cleanAttrs = attrs;
     cleanAttrs = cleanAttrs.replace(/\s*(target|rel|referrerpolicy)=['"][^'"]*['"]/gi, '');

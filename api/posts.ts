@@ -39,7 +39,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     let posts = rawPosts.map((p) => {
       const cat = detectCategory(p.labels || []);
-      const excerpt = (p.content || '').replace(/<[^>]*>?/gm, '').trim().slice(0, 180);
+      const cleanHtml = (p.content || '')
+        .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+        .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
+      const excerpt = cleanHtml.replace(/<[^>]*>?/gm, '').replace(/\s+/g, ' ').trim().slice(0, 180);
 
       return {
         ID: p.id,

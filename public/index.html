@@ -201,12 +201,15 @@
       body.innerHTML = '<div class="loading">글을 불러오는 중...</div>';
       modal.style.display = 'flex';
       try {
+        if (history.pushState && new URLSearchParams(window.location.search).get('id') !== id) {
+          history.pushState({ postId: id }, '', `/?id=${id}`);
+        }
         const res = await fetch(`/api/posts?id=${id}`);
         const p = await res.json();
         body.innerHTML = `
           <h1 style="font-size: 24px; font-weight: 800; margin-bottom: 12px; line-height: 1.4;">${p.title}</h1>
           <div style="font-size: 13px; color: var(--text-muted); margin-bottom: 24px;">
-            발행일: ${new Date(p.date).toLocaleString('ko-KR')} · 카테고리: ${Object.keys(p.categories)[0] || '트렌드'}
+            발행일: ${new Date(p.date).toLocaleString('ko-KR')} · 카테고리: ${Object.keys(p.categories || {})[0] || '트렌드'}
           </div>
           <div class="post-content">${p.content}</div>
         `;
@@ -217,9 +220,27 @@
 
     function closeModal() {
       document.getElementById('modal').style.display = 'none';
+      if (history.pushState && new URLSearchParams(window.location.search).get('id')) {
+        history.pushState(null, '', '/');
+      }
     }
 
-    window.addEventListener('DOMContentLoaded', () => loadPosts());
+    window.addEventListener('popstate', (e) => {
+      const urlId = new URLSearchParams(window.location.search).get('id');
+      if (urlId) {
+        openPost(urlId);
+      } else {
+        document.getElementById('modal').style.display = 'none';
+      }
+    });
+
+    window.addEventListener('DOMContentLoaded', () => {
+      loadPosts();
+      const urlId = new URLSearchParams(window.location.search).get('id');
+      if (urlId) {
+        openPost(urlId);
+      }
+    });
   </script>
 </body>
 </html>

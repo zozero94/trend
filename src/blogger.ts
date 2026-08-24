@@ -150,7 +150,7 @@ export class BloggerClient {
 
   async getPosts(maxResults: number = 30): Promise<BloggerPost[]> {
     const token = await this.getAccessToken();
-    const url = `https://www.googleapis.com/blogger/v3/blogs/${this.blogId}/posts?maxResults=${maxResults}&fetchBodies=true&status=LIVE`;
+    const url = `https://www.googleapis.com/blogger/v3/blogs/${this.blogId}/posts?maxResults=${maxResults}&fetchBodies=true&status=live`;
 
     const res = await fetch(url, {
       headers: { Authorization: `Bearer ${token}` },

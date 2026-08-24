@@ -2,13 +2,19 @@ import { TrendRawItem, TrendTopic, TrendCategory } from './types.js';
 import { GoogleGenAI } from '@google/genai';
 import { generateContentWithFallback, safeJsonParse } from './model-resolver.js';
 
+const BROWSER_UA =
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
+
 /**
  * 1. 구글 트렌드 대한민국 실시간 급상승 RSS 수집
  */
 export async function fetchGoogleTrendsKR(): Promise<TrendRawItem[]> {
   const url = 'https://trends.google.com/trending/rss?geo=KR';
   try {
-    const res = await fetch(url);
+    const res = await fetch(url, {
+      headers: { 'User-Agent': BROWSER_UA },
+      signal: AbortSignal.timeout(8000),
+    });
     if (!res.ok) return [];
     const xml = await res.text();
     const items: TrendRawItem[] = [];
@@ -49,7 +55,10 @@ export async function fetchGoogleTrendsKR(): Promise<TrendRawItem[]> {
 export async function fetchYouTubeTrends(): Promise<TrendRawItem[]> {
   const channelFeed = 'https://www.youtube.com/feeds/videos.xml?channel_id=UCF_XFhS0Z4CshAieG6hF3Yg';
   try {
-    const res = await fetch(channelFeed);
+    const res = await fetch(channelFeed, {
+      headers: { 'User-Agent': BROWSER_UA },
+      signal: AbortSignal.timeout(8000),
+    });
     if (!res.ok) return [];
     const xml = await res.text();
     const items: TrendRawItem[] = [];
@@ -91,7 +100,13 @@ export async function fetchTikTokAndReelsTrends(): Promise<TrendRawItem[]> {
   ];
 
   try {
-    const res = await fetch('https://m.search.naver.com/search.naver?query=%EC%9D%B8%EC%8A%A4%ED%83%80+%EB%A6%B4%EC%8A%A4+%EC%B1%8C%EB%A6%B0%EC%A7%80+%EC%9C%A0%ED%96%89');
+    const res = await fetch(
+      'https://m.search.naver.com/search.naver?query=%EC%9D%B8%EC%8A%A4%ED%83%80+%EB%A6%B4%EC%8A%A4+%EC%B1%8C%EB%A6%B0%EC%A7%80+%EC%9C%A0%ED%96%89',
+      {
+        headers: { 'User-Agent': BROWSER_UA },
+        signal: AbortSignal.timeout(8000),
+      }
+    );
     if (!res.ok) {
       return fallbackKeywords.map((f) => ({
         source: 'tiktok_reels',
@@ -132,7 +147,13 @@ export async function fetchTikTokAndReelsTrends(): Promise<TrendRawItem[]> {
  */
 export async function fetchNaverAndCommunityTrends(): Promise<TrendRawItem[]> {
   try {
-    const res = await fetch('https://m.search.naver.com/search.naver?query=%EC%8B%A4%EC%8B%9C%EA%B0%84+%ED%99%94%EC%A0%9C%EC%9D%98+%ED%8A%B8%EB%A0%8C%EB%93%9C');
+    const res = await fetch(
+      'https://m.search.naver.com/search.naver?query=%EC%8B%A4%EC%8B%9C%EA%B0%84+%ED%99%94%EC%A0%9C%EC%9D%98+%ED%8A%B8%EB%A0%8C%EB%93%9C',
+      {
+        headers: { 'User-Agent': BROWSER_UA },
+        signal: AbortSignal.timeout(8000),
+      }
+    );
     if (!res.ok) return [];
     const html = await res.text();
     const titleRegex = /class="news_tit"[^>]*title="([^"]+)"/g;
@@ -246,18 +267,16 @@ ${alreadyPublishedTitles.length > 0 ? alreadyPublishedTitles.slice(0, 25).map((t
     }));
   }
 
-  const fallbackCandidate = allItems[0]?.keyword || '실시간 화제의 신상 트렌드';
-  return [
-    {
-      keyword: fallbackCandidate,
-      category: 'HOT_PLACE',
-      categoryNameKo: 'SNS 핫플레이스 & 라이프 트렌드',
-      headlineHook: `${fallbackCandidate} 솔직 후기 및 완벽 분석`,
-      sources: ['tiktok_reels', 'youtube'],
-      matchScore: 90,
-      searchQueries: [`${fallbackCandidate} 위치`, `${fallbackCandidate} 가격`, `${fallbackCandidate} 솔직 후기`],
-    },
-  ];
+  // 폴백 시 3개의 유효한 후보 유지
+  return allItems.slice(0, count).map((item, idx) => ({
+    keyword: item.keyword,
+    category: 'HOT_PLACE',
+    categoryNameKo: 'SNS 핫플레이스 & 라이프 트렌드',
+    headlineHook: `${item.keyword} 솔직 후기 및 완벽 분석`,
+    sources: ['tiktok_reels', 'youtube'],
+    matchScore: 90,
+    searchQueries: [`${item.keyword} 위치`, `${item.keyword} 가격`, `${item.keyword} 솔직 후기`],
+  }));
 }
 
 /**
