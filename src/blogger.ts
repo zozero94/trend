@@ -37,6 +37,7 @@ export class BloggerClient {
         refresh_token: this.refreshToken,
         grant_type: 'refresh_token',
       }),
+      signal: AbortSignal.timeout(10000),
     });
 
     if (!res.ok) {
@@ -66,6 +67,7 @@ export class BloggerClient {
         content: htmlContent,
         labels,
       }),
+      signal: AbortSignal.timeout(12000),
     });
 
     if (!res.ok) {
@@ -91,6 +93,7 @@ export class BloggerClient {
     const res = await fetch(url, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(12000),
     });
 
     if (!res.ok) {
@@ -115,6 +118,7 @@ export class BloggerClient {
 
     const res = await fetch(url, {
       headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(10000),
     });
 
     if (!res.ok) {
@@ -140,6 +144,7 @@ export class BloggerClient {
     const res = await fetch(url, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(10000),
     });
 
     if (!res.ok && res.status !== 404) {
@@ -165,6 +170,7 @@ export class BloggerClient {
         content,
         labels,
       }),
+      signal: AbortSignal.timeout(12000),
     });
 
     if (!res.ok) {
@@ -189,6 +195,7 @@ export class BloggerClient {
 
     const res = await fetch(url, {
       headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(10000),
     });
 
     if (!res.ok) {
@@ -214,6 +221,7 @@ export class BloggerClient {
 
     const res = await fetch(url, {
       headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(10000),
     });
 
     if (!res.ok) {

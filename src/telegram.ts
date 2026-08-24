@@ -58,6 +58,7 @@ Blogger ID: ${bloggerPostId}
         text: messageText,
         reply_markup: inlineKeyboard,
       }),
+      signal: AbortSignal.timeout(10000),
     });
 
     if (!res.ok) {
@@ -79,6 +80,7 @@ Blogger ID: ${bloggerPostId}
           text,
           parse_mode: parseMode,
         }),
+        signal: AbortSignal.timeout(10000),
       });
       return res.ok;
     } catch (e) {

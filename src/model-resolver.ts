@@ -37,17 +37,24 @@ export async function generateContentWithFallback(
       return response;
     } catch (err: any) {
       lastError = err;
-      const isOverloaded =
+      const isRetryable =
         err?.status === 503 ||
         err?.message?.includes('503') ||
+        err?.status === 500 ||
+        err?.message?.includes('500') ||
+        err?.status === 502 ||
+        err?.message?.includes('502') ||
         err?.message?.includes('high demand') ||
         err?.status === 429 ||
         err?.message?.includes('429') ||
         err?.status === 404 ||
-        err?.message?.includes('RESOURCE_EXHAUSTED');
+        err?.message?.includes('RESOURCE_EXHAUSTED') ||
+        err?.message?.includes('fetch failed') ||
+        err?.message?.includes('ECONNRESET') ||
+        err?.message?.includes('ETIMEDOUT');
 
-      if (isOverloaded) {
-        console.warn(`[Gemini] 모델 ${modelName} 호출 실패 -> 다음 가용 모델로 자동 전환 중...`);
+      if (isRetryable) {
+        console.warn(`[Gemini] 모델 ${modelName} 호출 실패 (${err?.message?.slice(0, 80)}) -> 다음 가용 모델로 자동 전환 중...`);
         await new Promise((r) => setTimeout(r, 1000));
         continue;
       }

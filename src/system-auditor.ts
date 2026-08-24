@@ -204,7 +204,7 @@ export function auditEngineeringAndArchitecture(
   // 5. [media_placeholder] 더미 텍스트 / 빈 껍데기 요소 전량 소제
   // =========================================================================
   const placeholderIssues: string[] = [];
-  const dummyPattern = /\[\s*(이미지|사진|포토존|가이드|비주얼|영상|썸네일)[^\]]*\]|📸\s*\[[^\]]*\]|이미지\s*준비\s*중/gi;
+  const dummyPattern = /\[\s*(이미지|사진|포토존|비주얼|영상|썸네일)\s*(영역|가이드|설명|안내)?[^\]]*\]|📸\s*\[[^\]]*\]|이미지\s*준비\s*중/gi;
   if (dummyPattern.test(sanitizedHtml)) {
     placeholderIssues.push('이미지/미디어 더미 플레이스홀더 텍스트 잔존 ➔ 전량 삭제');
     sanitizedHtml = sanitizedHtml.replace(dummyPattern, '');
