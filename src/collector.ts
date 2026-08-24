@@ -39,7 +39,7 @@ export async function fetchGoogleTrendsKR(): Promise<TrendRawItem[]> {
         break;
       }
     } catch (e) {
-      console.warn(`[TrendCollector] Google Trends RSS (${url}) 실패, fallback 시도:`, e);
+      console.warn(`[TrendCollector] Google Trends RSS (${url}) 실패:`, e);
     }
   }
 
@@ -79,7 +79,40 @@ export async function fetchYouTubeTrends(): Promise<TrendRawItem[]> {
 }
 
 /**
- * 3. 네이버 및 커뮤니티 바이럴 트렌드 수집
+ * 3. 틱톡(TikTok) & 인스타그램 릴스(Reels) 실시간 바이럴 트렌드 수집 [신규 확장]
+ */
+export async function fetchTikTokAndReelsTrends(): Promise<TrendRawItem[]> {
+  const items: TrendRawItem[] = [];
+  const viralRssList = [
+    `https://news.google.com/rss/search?q=${encodeURIComponent('"틱톡 챌린지" OR "틱톡 유행" OR "틱톡 떡상" OR "틱톡 대란"')}&hl=ko&gl=KR&ceid=KR:ko`,
+    `https://news.google.com/rss/search?q=${encodeURIComponent('"인스타 릴스 유행" OR "릴스 챌린지" OR "인스타 핫플" OR "릴스 품절대란"')}&hl=ko&gl=KR&ceid=KR:ko`,
+  ];
+
+  for (const rss of viralRssList) {
+    try {
+      const feed = await parser.parseURL(rss);
+      (feed.items || []).slice(0, 10).forEach((it, idx) => {
+        if (it.title) {
+          items.push({
+            source: 'tiktok_reels',
+            keyword: it.title.split(' - ')[0].replace(/['"]/g, '').trim(),
+            title: it.title.trim(),
+            snippet: it.contentSnippet || '',
+            rank: idx + 1,
+            url: it.link,
+          });
+        }
+      });
+    } catch (e) {
+      // pass
+    }
+  }
+
+  return items;
+}
+
+/**
+ * 4. 네이버 및 커뮤니티 바이럴 트렌드 수집
  */
 export async function fetchNaverAndCommunityTrends(): Promise<TrendRawItem[]> {
   const items: TrendRawItem[] = [];
@@ -112,22 +145,23 @@ export async function fetchNaverAndCommunityTrends(): Promise<TrendRawItem[]> {
 }
 
 /**
- * 4. 3대 소스 교집합 가중치 1등 주제 선별 (최근 발행 글 중복 100% 원천 차단)
+ * 5. 5대 소스(구글·유튜브·틱톡·릴스·네이버) 교집합 가중치 1등 주제 선별 (최근 발행 글 중복 100% 원천 차단)
  */
 export async function selectTopTrendTopic(
   apiKey: string,
   alreadyPublishedTitles: string[] = []
 ): Promise<TrendTopic> {
-  console.log('📡 [트렌드 수집기] 구글 트렌드, 유튜브, 네이버 3대 소스 동시 수집 중...');
+  console.log('📡 [트렌드 5대 소스 수집기] 구글, 유튜브, 틱톡, 릴스, 네이버 전수 동시 수집 중...');
   
-  const [googleItems, ytItems, naverItems] = await Promise.all([
+  const [googleItems, ytItems, tiktokReelsItems, naverItems] = await Promise.all([
     fetchGoogleTrendsKR(),
     fetchYouTubeTrends(),
+    fetchTikTokAndReelsTrends(),
     fetchNaverAndCommunityTrends(),
   ]);
 
-  let allItems = [...googleItems, ...ytItems, ...naverItems];
-  console.log(`📊 수집 완료: 구글(${googleItems.length}건), 유튜브(${ytItems.length}건), 네이버/바이럴(${naverItems.length}건) -> 총 ${allItems.length}개 후보`);
+  let allItems = [...googleItems, ...ytItems, ...tiktokReelsItems, ...naverItems];
+  console.log(`📊 5대 소스 수집 완료: 구글(${googleItems.length}건), 유튜브(${ytItems.length}건), 틱톡/릴스(${tiktokReelsItems.length}건), 네이버/바이럴(${naverItems.length}건) -> 총 ${allItems.length}개 후보`);
 
   // 1. 최근 발행된 글 목록과 중복되는 키워드 1차 코드 레벨 필터링
   if (alreadyPublishedTitles.length > 0) {
@@ -144,21 +178,21 @@ export async function selectTopTrendTopic(
   }
 
   const prompt = `당신은 대한민국 최고의 트렌드 큐레이터이자 바이럴 분석가입니다.
-아래는 오늘 실시간으로 수집된 [구글 트렌드], [유튜브 쇼츠/인기영상], [네이버/커뮤니티 바이럴] 신규 후보 데이터입니다.
+아래는 오늘 실시간으로 수집된 [구글 트렌드], [유튜브 쇼츠/인기영상], [틱톡/릴스 챌린지], [네이버/커뮤니티 바이럴] 신규 후보 데이터입니다.
 
 [수집된 신규 트렌드 후보 풀]
-${JSON.stringify(allItems.slice(0, 40), null, 2)}
+${JSON.stringify(allItems.slice(0, 45), null, 2)}
 
 [🚫 절대 중복 금지 목록 - 최근 이미 발행된 포스팅]
-${alreadyPublishedTitles.length > 0 ? alreadyPublishedTitles.slice(0, 20).map((t) => `- ${t}`).join('\n') : '없음'}
+${alreadyPublishedTitles.length > 0 ? alreadyPublishedTitles.slice(0, 25).map((t) => `- ${t}`).join('\n') : '없음'}
 
 [선별 기준]
 1. ★ **신규 대세 주제 필수**: 위 [절대 중복 금지 목록]에 이미 발행된 키워드/소재는 100% 배제하고, 아직 다루지 않은 완전히 새로운 차순위 대세 트렌드 1개를 선정하세요.
-2. ★ **교차 교집합 최우선**: 구글, 유튜브, 네이버 중 2개 이상의 소스에서 공통적으로 유행하거나 검색량이 폭발하고 있는 대세 주제를 고르세요.
+2. ★ **5대 소스 교차 교집합 최우선**: 구글, 유튜브, 틱톡, 릴스, 네이버 중 2개 이상의 소스에서 공통적으로 유행하거나 검색량이 폭발하고 있는 대세 주제를 고르세요.
 3. **카테고리 분류**: 다음 3가지 중 하나로 명확히 분류하세요:
    - 'HOT_PLACE': 성수/홍대/강남 등 SNS 화제의 맛집, 신상 카페, 팝업스토어, 여행지
    - 'SHOPPING_ITEM': 다이소 대란템, 올리브영 꿀템, 쿠팡 인기템, 신상 전자기기/패션
-   - 'MEME_TREND': 릴스/쇼츠 유행어, 밈 챌린지, 화제의 인물/사건 이슈
+   - 'MEME_TREND': 릴스/쇼츠/틱톡 유행어, 밈 챌린지, 화제의 인물/사건 이슈
 4. **후킹 포인트 도출**: 점심시간(12:00) 직장인/학생이 홀린 듯이 클릭할 수밖에 없는 어그로/호기심 자극 포인트 작성.
 5. **검색 쿼리 생성**: 사실 확인(위치, 가격, 구매처, 팩트체크)을 위해 웹에서 검색할 키워드 3~4개 생성.
 
@@ -168,7 +202,7 @@ ${alreadyPublishedTitles.length > 0 ? alreadyPublishedTitles.slice(0, 20).map((t
   "category": "HOT_PLACE | SHOPPING_ITEM | MEME_TREND",
   "categoryNameKo": "SNS 핫플레이스/맛집 (또는 바이럴 꿀템/쇼핑, 화제의 밈/이슈)",
   "headlineHook": "어그로 후킹 핵심 요약",
-  "sources": ["youtube", "google_trends"],
+  "sources": ["tiktok_reels", "youtube", "google_trends"],
   "matchScore": 95,
   "searchQueries": ["키워드 위치", "키워드 가격", "키워드 솔직 후기"]
 }`;
@@ -190,7 +224,7 @@ ${alreadyPublishedTitles.length > 0 ? alreadyPublishedTitles.slice(0, 20).map((t
     category: (rawObj?.category as TrendCategory) || ('HOT_PLACE' as TrendCategory),
     categoryNameKo: rawObj?.categoryNameKo || 'SNS 핫플레이스 & 라이프 트렌드',
     headlineHook: rawObj?.headlineHook || `${fallbackCandidate} 솔직 후기 및 완벽 분석`,
-    sources: Array.isArray(rawObj?.sources) && rawObj.sources.length > 0 ? rawObj.sources : ['google_trends', 'youtube'],
+    sources: Array.isArray(rawObj?.sources) && rawObj.sources.length > 0 ? rawObj.sources : ['tiktok_reels', 'youtube'],
     matchScore: typeof rawObj?.matchScore === 'number' ? rawObj.matchScore : 90,
     searchQueries: Array.isArray(rawObj?.searchQueries) && rawObj.searchQueries.length > 0
       ? rawObj.searchQueries

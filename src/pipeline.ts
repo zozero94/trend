@@ -131,8 +131,8 @@ async function runTrendPipeline() {
   );
   console.log(`📄 작성된 초안 제목: "${initialPost.title}"`);
 
-  // --- 4단계: 10인 트렌드/바이럴 에이전트 2회 교차 감수 및 리라이팅 ---
-  console.log('\n[4단계] 10인의 바이럴/트렌드 전문가 감수 루프 실행...');
+  // --- 4단계: 15인 트렌드/바이럴 에이전트 최소 2회+80점 돌파 감수 및 리라이팅 ---
+  console.log('\n[4단계] 15인의 바이럴/트렌드 전문가 감수 루프 실행 (최소 2회 + 80점 돌파제)...');
   const { finalPost, reviewSummary } = await executeTwoRoundTrendReviewLoop(geminiApiKey, initialPost, topic);
 
   // --- 4.5단계: 본문 최종 HTML 내 모든 링크 전수 감사 및 오탈자/이미지/더미요소 자동 교정 ---
