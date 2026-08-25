@@ -11,14 +11,18 @@ export async function generateInitialTrendPost(
 ): Promise<TrendPost> {
   const ai = new GoogleGenAI({ apiKey });
 
-  const officialLink = verifiedLinks.find((v) => v.linkType === 'DIRECT_OFFICIAL');
-  const isDirectOfficial = !!officialLink;
+  // 가장 일치도가 높은 단 1개의 최우선 공식/대표 링크 선별
+  const officialLink = verifiedLinks.find((v) => v.linkType === 'DIRECT_OFFICIAL') ||
+    verifiedLinks.find((v) => v.isHealthy && (v.relevanceScore ?? 0) >= 75) ||
+    verifiedLinks[0];
+
+  const isDirectOfficial = officialLink?.linkType === 'DIRECT_OFFICIAL';
   const officialUrl = officialLink?.finalUrl || `https://m.search.naver.com/search.naver?query=${encodeURIComponent(topic.keyword)}`;
-  const officialSiteTitle = isDirectOfficial ? '🏛️ 공식 오피셜 바로가기' : '🔍 실시간 입고 & 최저가 검색';
+  const officialSiteTitle = isDirectOfficial ? '🏛️ 공식 오피셜 바로가기' : '🔍 실시간 공식 정보 확인';
   const officialCardDescription = isDirectOfficial
     ? '공식몰, 공식 예약 사이트 및 상세 공지를 바로 확인하세요.'
-    : '국내 공식 판매처가 한정되어 있어 실시간 입고 현황 및 스마트스토어 검색을 확인하세요.';
-  const officialButtonText = isDirectOfficial ? '공식 바로가기 &rarr;' : '실시간 정보 확인 &rarr;';
+    : '실시간 입고 현황, 최신 공지 및 상세 정보를 확인하세요.';
+  const officialButtonText = isDirectOfficial ? '공식 바로가기 &rarr;' : '상세 정보 확인 &rarr;';
 
   const verifiedLinksSummary = verifiedLinks
     .map(
@@ -27,23 +31,15 @@ export async function generateInitialTrendPost(
     )
     .join('\n');
 
-  const youtubeEmbedHtml = `
-  <div style="margin: 32px 0; padding: 22px; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border-radius: 16px; color: #ffffff; box-shadow: 0 8px 24px rgba(0,0,0,0.12); text-align: center;">
-    <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 12px;">
-      <span style="font-size: 22px;">🎬</span>
-      <h4 style="margin: 0; font-size: 17px; font-weight: 700; color: #ffffff;">[실시간 화제] ${topic.keyword} 유튜브 쇼츠 & 현장 영상</h4>
-    </div>
-    <p style="font-size: 13.5px; color: #cbd5e1; margin: 0 0 18px 0; line-height: 1.5;">SNS에서 화제를 모은 ${topic.keyword}의 실제 영상과 리얼 리뷰를 지금 확인하세요.</p>
-    <a href="https://www.youtube.com/results?search_query=${encodeURIComponent(topic.keyword)}" target="_blank" rel="noreferrer noopener" referrerpolicy="no-referrer" style="display: inline-flex; align-items: center; gap: 8px; background: #ff0000; color: #ffffff !important; padding: 12px 24px; border-radius: 30px; font-weight: 700; font-size: 15px; text-decoration: none; box-shadow: 0 4px 14px rgba(255,0,0,0.4);">
-      ▶ 유튜브에서 화제 영상 바로보기 &rarr;
-    </a>
-  </div>`;
+  const systemInstruction = `당신은 2030 트렌드 이슈를 빠르고 정확하게 분석하는 트렌드 전문 에디터입니다.
+점심시간(12:00) 스마트폰을 켠 2030 직장인과 학생들이 호기심을 참지 못하고 클릭할 수밖에 없는 **키워드 중심 후킹 제목**과 **군더더기 없는 고품질 반응형 HTML 칼럼**을 작성하세요.
+이 초안은 작성 직후 **19인 전문 감수 위원회의 절대 감점제 채점**을 받습니다. 아래 [감수단 사전 통과 체크리스트]의 항목이 하나라도 빠지면 해당 위원이 즉시 감점하므로, 초안 단계에서 전 항목을 반드시 포함하세요.
 
-  const systemInstruction = `당신은 대한민국에서 가장 감각적인 트렌드 매거진 수석 에디터이자, 릴스/쇼츠 바이럴 및 모바일 UX 전문가입니다.
-점심시간(12:00) 스마트폰을 켠 2030 직장인과 학생들이 호기심을 참지 못하고 클릭할 수밖에 없는 **키워드 중심 후킹(어그로) 제목**과 **군더더기 없는 고품질 반응형 HTML 칼럼**을 작성하세요.
-이 초안은 작성 직후 **16인 전문 감수 위원회의 절대 감점제 채점**을 받습니다. 아래 [감수단 사전 통과 체크리스트]의 항목이 하나라도 빠지면 해당 위원이 즉시 감점하므로, 초안 단계에서 전 항목을 반드시 포함하세요.
-
-[★ 16인 감수단 사전 통과 체크리스트 — 누락 시 감점되는 필수 요소]
+[★ 19인 감수단 사전 통과 체크리스트 — 누락 시 감점되는 필수 요소]
+□ 🚫 AI 상투적 자기소개 배제 (첫 문장에 "안녕하세요", "가장 감각적인 에디터입니다" 등 등장 시 감점관 즉시 1점 처리)
+□ 🔗 단 1개의 공식/대표 링크 카드 (무분별한 네이버/유튜브/SNS 링크 남발 시 단일 링크 검증관 -5점)
+□ ⚖️ 객관적으로 증명 가능한 팩트만 서술 (입증 불가능한 뇌피셜/미확인 루머 1건당 사실 감사관 -4점)
+□ 🛡️ 법적 컴플라이언스 준수 (비방/명예훼손, 공정위 고지 누락 1건당 변호인 -5점)
 □ 제목: 숫자/구체 키워드 + 궁금증 유발 장치 (없으면 헤드라인 마스터 각 -3점), 낚시 금지, 브랜드/밈 오탈자 1건당 -4점
 □ 3줄 핵심 요약 콜아웃 박스 (누락 시 모바일 UX 위원 -3점)
 □ 🏛️ 오피셜/검색 바로가기 카드 (누락 시 오피셜 최적화관 -4점)
@@ -55,16 +51,24 @@ export async function generateInitialTrendPost(
 □ 밈 주제: 원본 출처 명시(-4점), 유래 추측/왜곡 서술 금지(-4점)
 □ 쇼핑 주제: 쿠팡 CTA 배너(-4점) + 공정위 파트너스 고지 문구(누락 시 컴플라이언스 -6점)
 □ 도입 3문장 내 끝까지 읽을 이유 예고 + 섹션 간 브릿지 문장 + 결말 꿀팁 보상 (체류시간 부스터 각 -2~3점)
-□ 사전 검증된 링크 목록의 URL만 사용 — 새 URL 임의 창작 시 랜딩 팩트체커 1건당 -4점
 □ ${isDirectOfficial ? '공식 직영몰/예약처가 확인되었으므로 "공식 사이트에서 확인하세요"라고 정확히 서술' : '공식 직영몰이 부재하여 검색 링크로 대체되었으므로 "공식몰"이라는 허위 서술 금지, "실시간 입고 및 최저가 검색"으로 본문 서술'}
 □ 근거 없는 최상급 표현("인생템", "무조건 사세요") 및 일방적 찬양 톤 금지 (악취 필터링관 감점)
 □ [이미지: ...] 등 더미 텍스트 1개라도 존재 시 더미 감수관 즉시 1점 처리
 
 [핵심 작성 원칙]
-1. ★ **CTR 극대화 키워드 중심 후킹 제목**:
+1. **🚫 AI 상투적 표현 및 인위적 자기소개 전면 금지**:
+   - "대한민국에서 가장 감각적인 에디터입니다", "안녕하세요", "오늘은 화제의 ~에 대해 알아보겠습니다" 등 인위적인 AI 자기소개 전면 금지!
+   - 1문장부터 문제의 핵심 후킹 포인트 및 생생한 현장 팩트로 군더더기 없이 자연스럽게 시작하세요.
+2. **🔗 단 1개의 가장 일치하는 공식/대표 링크 원칙**:
+   - 본문 전체에서 링크는 오직 사전 검증된 **단 1개의 공식/대표 바로가기 배너 카드**만 허용됩니다.
+   - 의미 없는 일반 검색 링크(네이버, 유튜브, 인스타 등)를 본문 중간에 산만하게 마구 도배하는 행위는 엄격히 금지됩니다.
+3. **⚖️ 객관적 사실 입증 & 법적 컴플라이언스 준수**:
+   - 객관적으로 검증할 수 없는 뇌피셜, 허위 루머, 주관적 과장 표현을 전면 배제합니다.
+   - 특정인/특정 매장에 대한 비방(명예훼손)을 절대 금지하며, 쇼핑 주제 시 공정위 대가성 고지를 명확히 기재하세요.
+4. ★ **CTR 극대화 키워드 중심 후킹 제목**:
    - 클릭을 유발하는 강력한 호기심/의문형/경고형 후킹 기법 사용.
    - 밈/브랜드/상품명에 오탈자가 절대 없도록 정확한 표준 명칭을 사용하세요.
-2. **모바일 3초 스크롤 가독성 (HTML 스타일)**:
+5. **모바일 3초 스크롤 가독성 (HTML 스타일)**:
    - 문단은 2~3문장 단위로 짧게 분리.
    - 핵심 단어는 <strong> 태그로 강조.
    - 도입부에 부드러운 파스텔톤의 3줄 핵심 요약 콜아웃 박스 필수 배치:
@@ -72,8 +76,8 @@ export async function generateInitialTrendPost(
        <strong style="color: #1e40af; font-size: 15px;">⚡ 3줄 핵심 요약</strong>
        <ul style="margin: 8px 0 0 0; padding-left: 18px; font-size: 14.5px; color: #1e293b;">...</ul>
      </div>
-3. **🏛️ 바로가기 배너 카드 (필수 삽입)**:
-   - 본문 상단에 독자가 바로 확인을 할 수 있는 카드를 삽입하세요:
+6. **🏛️ 바로가기 배너 카드 (단 1개 필수 삽입)**:
+   - 본문 상단에 독자가 바로 확인을 할 수 있는 카드를 단 1개 삽입하세요:
      <div style="background: #f1f5f9; border: 1.5px solid #cbd5e1; border-radius: 10px; padding: 14px 18px; margin: 20px 0; display: flex; align-items: center; justify-content: space-between;">
        <div>
          <strong style="color: #0f172a; font-size: 14px;">${officialSiteTitle}</strong>
@@ -81,21 +85,18 @@ export async function generateInitialTrendPost(
        </div>
        <a href="${officialUrl}" target="_blank" rel="noreferrer noopener" referrerpolicy="no-referrer" style="display: inline-block; background: #0f172a; color: #ffffff !important; padding: 8px 14px; border-radius: 6px; font-size: 13px; font-weight: 700; text-decoration: none; white-space: nowrap;">${officialButtonText}</a>
      </div>
-4. **★ 내돈내산 솔직 단점 & 아쉬운 점 (1문단 필수 작성)**:
+7. **★ 내돈내산 솔직 단점 & 아쉬운 점 (1문단 필수 작성)**:
    - 무조건적인 찬양글은 절대 금지! 실제 구매자/방문자의 솔직한 호불호, 웨이팅 고충, 아쉬운 가성비나 단점을 1문단 이상 명확히 분석하세요.
-5. **카테고리별 특화 필수 구성**:
-   - **HOT_PLACE (맛집/핫플)**:
-     - 도로명 주소, 네이버 지도 검색 바로가기 링크(https://m.map.naver.com/search2/search.naver?query=[장소명]), 영업시간, 주차 팁, 대표 메뉴 가격표(Table), 웨이팅 피하는 시간대, 솔직한 호불호 평가.
-   - **SHOPPING_ITEM (바이럴 꿀템/쇼핑)**:
-     - 제품 스펙/가격표, 바이럴 이유, ★솔직한 단점 및 아쉬운 점, 강력 추천 대상 vs 비추천 대상, 모바일 쿠팡 파트너스 CTA 배너.
-   - **MEME_TREND (화제의 밈/이슈)**:
-     - 밈의 원본 출처 및 유래, 정확한 뜻과 맥락, 상황별 찰진 사용 예시, 패러디 반응.
-6. **구글 검색 1페이지 상단 노출용 FAQ 3문 3답**:
+8. **카테고리별 특화 필수 구성**:
+   - **HOT_PLACE (맛집/핫플)**: 도로명 주소, 영업시간, 주차 팁, 대표 메뉴 가격표(Table), 웨이팅 피하는 시간대, 솔직한 호불호 평가.
+   - **SHOPPING_ITEM (바이럴 꿀템/쇼핑)**: 제품 스펙/가격표, 바이럴 이유, ★솔직한 단점 및 아쉬운 점, 강력 추천 대상 vs 비추천 대상, 모바일 쿠팡 파트너스 CTA 배너.
+   - **MEME_TREND (화제의 밈/이슈)**: 밈의 원본 출처 및 유래, 정확한 뜻과 맥락, 상황별 찰진 사용 예시, 패러디 반응.
+9. **구글 검색 1페이지 상단 노출용 FAQ 3문 3답**:
    - 본문 하단에 독자들이 검색창에 직접 쳐볼 법한 핵심 질문 3선(Q&A)을 반드시 배치하세요.
-7. **🚫 절대 금지 항목 (엄격 준수)**:
+10. **🚫 절대 금지 항목 (엄격 준수)**:
    - 텍스트 형태의 '📸 [이미지: ...]', '사진 가이드', 회색 빈 박스 등 모든 종류의 이미지 플레이스홀더 작성 절대 금지!
    - '단톡방 공유용 카톡 템플릿' 같은 가짜 공유 박스 작성 절대 금지.
-8. **쿠팡 파트너스 CTA 배너 (${topic.category === 'SHOPPING_ITEM' ? '필수 포함' : '해당시 포함'})**:
+11. **쿠팡 파트너스 CTA 배너 (${topic.category === 'SHOPPING_ITEM' ? '필수 포함' : '해당시 포함'})**:
    - 쇼핑/아이템 연관 주제인 경우 본문 하단에 반드시 세련된 CTA 버튼과 공정위 필수 문구를 삽입하세요:
    \`<div style="margin: 32px 0; padding: 24px; background: #fff5f5; border-radius: 12px; border: 1px solid #ffd8d8; text-align: center;"><a href="${coupangSearchUrl}" target="_blank" rel="noreferrer noopener" referrerpolicy="no-referrer" style="display: inline-block; padding: 14px 28px; background: #e60012; color: #ffffff !important; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; box-shadow: 0 4px 12px rgba(230,0,18,0.25);">🔥 [${topic.keyword}] 최저가 & 실시간 재고 확인하기 &rarr;</a><p style="font-size: 11px; color: #888888; margin-top: 12px; margin-bottom: 0;">이 포스팅은 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다. (추천인: ${coupangPartnersId})</p></div>\`
 
@@ -132,12 +133,7 @@ ${verifiedLinksSummary || '기본 트렌드 검색 결과 반영'}
     });
 
     const parsed = safeJsonParse<any>(response.text || '{}', {});
-    let html = parsed.htmlContent || `<p>${topic.keyword} 분석 내용</p>`;
-
-    // 유튜브 반응형 임베드 삽입 (본문 중단 자연스러운 위치)
-    if (!html.includes('iframe') && !html.includes('youtube')) {
-      html += youtubeEmbedHtml;
-    }
+    const html = parsed.htmlContent || `<p>${topic.keyword} 실시간 분석 내용입니다.</p>`;
 
     return {
       title: parsed.title || `[화제] 요즘 난리난 '${topic.keyword}' 핵심 총정리`,
@@ -159,7 +155,7 @@ ${verifiedLinksSummary || '기본 트렌드 검색 결과 반영'}
       category: topic.category,
       categoryNameKo: topic.categoryNameKo,
       tags: [topic.keyword, '트렌드', '핫이슈'],
-      htmlContent: `<h2>요즘 난리난 ${topic.keyword}</h2><p>실시간으로 큰 화제를 모으고 있는 ${topic.keyword}의 핵심 정보를 전해드립니다.</p>${youtubeEmbedHtml}`,
+      htmlContent: `<h2>요즘 난리난 ${topic.keyword}</h2><p>실시간으로 큰 화제를 모으고 있는 ${topic.keyword}의 핵심 정보를 전해드립니다.</p>`,
       verifiedLinks,
       coupangUrl: coupangSearchUrl,
     };

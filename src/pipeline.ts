@@ -110,14 +110,14 @@ async function runTrendPipeline() {
       );
       console.log(`📄 작성된 초안 제목: "${initialPost.title}"`);
 
-      // --- 4단계: 16인 트렌드/바이럴 에이전트 최소 2회+75점 돌파 감수 및 리라이팅 ---
-      console.log('\n[4단계] 16인의 바이럴/트렌드 전문가 감수 루프 실행 (최소 2회 + 75점 돌파제)...');
+      // --- 4단계: 19인 트렌드/바이럴/법률 에이전트 최소 2회+75점 돌파 감수 및 리라이팅 ---
+      console.log('\n[4단계] 19인의 바이럴/트렌드/법률 전문가 감수 루프 실행 (최소 2회 + 75점 돌파제)...');
       const reviewResult = await executeTwoRoundTrendReviewLoop(geminiApiKey, initialPost, topic);
       const { finalPost, reviewSummary, passed, finalScore } = reviewResult;
 
       // ★ [품질 방어선] 75점 미만 시 차순위 주제로 자동 전환 & 재탐구
       if (!passed) {
-        console.warn(`\n🚫 [후보 ${candidateIdx + 1} 반려] 16인 종합 점수(${finalScore}점)가 75점 기준 미달!`);
+        console.warn(`\n🚫 [후보 ${candidateIdx + 1} 반려] 19인 종합 점수(${finalScore}점)가 75점 기준 미달!`);
         const nextCandidate = candidateTopics[candidateIdx + 1];
 
         if (telegramBotToken && telegramChatId) {
