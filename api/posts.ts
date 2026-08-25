@@ -7,7 +7,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const clientSecret = process.env.BLOGGER_CLIENT_SECRET || '';
   const refreshToken = process.env.BLOGGER_REFRESH_TOKEN || '';
 
-  res.setHeader('Cache-Control', 's-maxage=10, stale-while-revalidate=60');
   res.setHeader('Access-Control-Allow-Origin', '*');
 
   try {
@@ -17,6 +16,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (id) {
       const post = await blogger.getPostById(String(id));
       if (!post) {
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
         return res.status(404).json({ error: 'Post not found' });
       }
 
@@ -32,6 +32,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }, {}),
       };
 
+      res.setHeader('Cache-Control', 's-maxage=10, stale-while-revalidate=60');
       return res.status(200).json(formatted);
     }
 
@@ -69,9 +70,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
+    res.setHeader('Cache-Control', 's-maxage=10, stale-while-revalidate=60');
     return res.status(200).json({ found: posts.length, posts });
   } catch (error) {
     console.error('API Error:', error);
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
     return res.status(500).json({ error: 'Failed to fetch posts from Trend Blogger' });
   }
 }

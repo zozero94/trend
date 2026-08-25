@@ -11,6 +11,7 @@ export const DEFAULT_OFFICIAL_ALIASES = [
 
 let cachedDiscoveredModels: string[] | null = null;
 let lastDiscoveryTime: number = 0;
+let activeWorkingModel: string | null = null;
 
 /**
  * 2. 구글 서버에서 현재 실제 가용한 텍스트 모델을 실시간 자동 발굴 (화이트리스트 관리 제로)
@@ -63,7 +64,11 @@ export async function generateContentWithFallback(
   }
 ) {
   let lastError: any = null;
-  const modelsToTry = await getDynamicModelPool(ai);
+  const pool = await getDynamicModelPool(ai);
+  // Fast-path: 직전에 성공했던 모델을 최우선으로 배치
+  const modelsToTry = activeWorkingModel
+    ? [activeWorkingModel, ...pool.filter((m) => m !== activeWorkingModel)]
+    : pool;
 
   for (const modelName of modelsToTry) {
     try {
@@ -72,12 +77,26 @@ export async function generateContentWithFallback(
         contents: params.contents,
         config: params.config,
       });
+      activeWorkingModel = modelName;
       return response;
     } catch (err: any) {
       lastError = err;
+      const status = err?.status || err?.statusCode;
       const errMsg = err?.message || String(err);
-      console.warn(`⚠️ [Gemini Fallback] 모델 "${modelName}" 호출 실패 (${err?.status || err?.name || ''}: ${errMsg.slice(0, 100)}) -> 다음 가용 모델로 자동 전환...`);
-      await new Promise((r) => setTimeout(r, 1200));
+
+      // 400, 401, 403, API_KEY_INVALID, SAFETY 등 재시도 불가 치명적 오류는 즉시 throw
+      if (
+        status === 400 ||
+        status === 401 ||
+        status === 403 ||
+        errMsg.includes('API_KEY_INVALID') ||
+        errMsg.includes('SAFETY')
+      ) {
+        throw new Error(`[Gemini Fatal] 재시도 불가 오류 발생 (${status || 'AUTH/SAFETY'}): ${errMsg}`);
+      }
+
+      console.warn(`⚠️ [Gemini Fallback] 모델 "${modelName}" 호출 실패 (${status || err?.name || ''}: ${errMsg.slice(0, 100)}) -> 다음 가용 모델로 자동 전환...`);
+      await new Promise((r) => setTimeout(r, 800));
       continue;
     }
   }

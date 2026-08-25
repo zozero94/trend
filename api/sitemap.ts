@@ -21,7 +21,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const lastMod = p.published ? new Date(p.published).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
         return `
   <url>
-    <loc>${domain}/?id=${p.id}</loc>
+    <loc>${domain}/post.html?id=${p.id}</loc>
     <lastmod>${lastMod}</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.9</priority>

@@ -19,7 +19,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const rssItems = posts
       .map((p) => {
         const pubDate = new Date(p.published || new Date()).toUTCString();
-        const link = `${domain}/?id=${p.id}`;
+        const link = `${domain}/post.html?id=${p.id}`;
         const title = escapeXml(p.title || '');
         const rawDesc = (p.content || '').replace(/<[^>]*>?/gm, '').trim();
         const description = escapeXml(rawDesc.slice(0, 300));

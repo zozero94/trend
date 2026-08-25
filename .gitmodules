@@ -1,3 +1,4 @@
 [submodule "public/shared"]
 	path = public/shared
 	url = https://github.com/zozero94/shared-ui.git
+	branch = main
