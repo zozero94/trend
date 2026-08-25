@@ -1,6 +1,10 @@
 import { GoogleGenAI } from '@google/genai';
 import { TrendTopic, TrendPost, VerifiedLink } from './types.js';
-import { generateContentWithFallback, safeJsonParse } from './model-resolver.js';
+import {
+  generateContentWithFallback,
+  safeJsonParse,
+  extractCleanTrendPostFromRawText,
+} from './model-resolver.js';
 
 export async function generateInitialTrendPost(
   apiKey: string,
@@ -33,16 +37,16 @@ export async function generateInitialTrendPost(
 
   const systemInstruction = `당신은 2030 트렌드 이슈를 빠르고 정확하게 분석하는 트렌드 전문 에디터입니다.
 점심시간(12:00) 스마트폰을 켠 2030 직장인과 학생들이 호기심을 참지 못하고 클릭할 수밖에 없는 **키워드 중심 후킹 제목**과 **군더더기 없는 고품질 반응형 HTML 칼럼**을 작성하세요.
-이 초안은 작성 직후 **19인 전문 감수 위원회의 절대 감점제 채점**을 받습니다. 아래 [감수단 사전 통과 체크리스트]의 항목이 하나라도 빠지면 해당 위원이 즉시 감점하므로, 초안 단계에서 전 항목을 반드시 포함하세요.
+이 초안은 작성 직후 **18인 전문 감수 위원회의 절대 감점제 채점**을 받습니다. 아래 [감수단 사전 통과 체크리스트]의 항목이 하나라도 빠지면 해당 위원이 즉시 감점하므로, 초안 단계에서 전 항목을 반드시 포함하세요.
 
-[★ 19인 감수단 사전 통과 체크리스트 — 누락 시 감점되는 필수 요소]
+[★ 18인 감수단 사전 통과 체크리스트 — 누락 시 감점되는 필수 요소]
 □ 🚫 AI 상투적 자기소개 배제 (첫 문장에 "안녕하세요", "가장 감각적인 에디터입니다" 등 등장 시 감점관 즉시 1점 처리)
-□ 🔗 단 1개의 공식/대표 링크 카드 (무분별한 네이버/유튜브/SNS 링크 남발 시 단일 링크 검증관 -5점)
+□ 🔗 단 1개의 공식/대표 링크 카드 (무분별한 네이버/유튜브/SNS 링크 남발 시 단일 링크 검증관 -5점, 쇼핑 쿠팡 CTA 및 핫플 지도는 예외 인정)
 □ ⚖️ 객관적으로 증명 가능한 팩트만 서술 (입증 불가능한 뇌피셜/미확인 루머 1건당 사실 감사관 -4점)
 □ 🛡️ 법적 컴플라이언스 준수 (비방/명예훼손, 공정위 고지 누락 1건당 변호인 -5점)
 □ 제목: 숫자/구체 키워드 + 궁금증 유발 장치 (없으면 헤드라인 마스터 각 -3점), 낚시 금지, 브랜드/밈 오탈자 1건당 -4점
 □ 3줄 핵심 요약 콜아웃 박스 (누락 시 모바일 UX 위원 -3점)
-□ 🏛️ 오피셜/검색 바로가기 카드 (누락 시 오피셜 최적화관 -4점)
+□ 🏛️ 오피셜/검색 바로가기 카드 (누락 시 랜딩 팩트체커 -4점)
 □ 내돈내산 치명적 단점/호불호 문단 + "이런 사람에겐 비추천" 명시 (단점 문단 누락 시 솔직 리뷰어 -6점)
 □ FAQ 3선 — 검색어형 질문 + 수치/날짜/장소가 담긴 팩트 답변 (누락 시 FAQ 설계관 -5점)
 □ 모든 문단 2~3문장 (4문장 이상 문단 1개라도 존재 시 UX 위원 -6점)
@@ -132,30 +136,26 @@ ${verifiedLinksSummary || '기본 트렌드 검색 결과 반영'}
       },
     });
 
-    const parsed = safeJsonParse<any>(response.text || '{}', {});
-    const html = parsed.htmlContent || `<p>${topic.keyword} 실시간 분석 내용입니다.</p>`;
-
-    return {
-      title: parsed.title || `[화제] 요즘 난리난 '${topic.keyword}' 핵심 총정리`,
-      summary: parsed.summary || `${topic.keyword} 실시간 트렌드 분석입니다.`,
-      metaDescription: parsed.metaDescription || `${topic.keyword} 실시간 트렌드 정보 안내`,
-      category: topic.category,
-      categoryNameKo: topic.categoryNameKo,
-      tags: parsed.tags || [topic.keyword, topic.categoryNameKo, '트렌드', '핫플', '꿀템'],
-      htmlContent: html,
+    const responseText = response.text || '';
+    return extractCleanTrendPostFromRawText(
+      responseText,
+      `[화제] 요즘 난리난 '${topic.keyword}' 핵심 총정리`,
+      topic.category,
+      topic.categoryNameKo,
+      [topic.keyword, topic.categoryNameKo, '트렌드', '핫플', '꿀템'],
       verifiedLinks,
-      coupangUrl: coupangSearchUrl,
-    };
+      coupangSearchUrl
+    );
   } catch (e) {
     console.error('[TrendAI] 초안 작성 실패, 기본 템플릿 반환:', e);
     return {
       title: `[화제] 요즘 난리난 '${topic.keyword}' 핵심 총정리`,
-      summary: `${topic.keyword}에 대한 실시간 트렌드 및 핵심 정보 분석입니다.`,
+      summary: `${topic.keyword} 실시간 트렌드 분석입니다.`,
       metaDescription: `${topic.keyword} 실시간 트렌드 정보 안내`,
       category: topic.category,
       categoryNameKo: topic.categoryNameKo,
-      tags: [topic.keyword, '트렌드', '핫이슈'],
-      htmlContent: `<h2>요즘 난리난 ${topic.keyword}</h2><p>실시간으로 큰 화제를 모으고 있는 ${topic.keyword}의 핵심 정보를 전해드립니다.</p>`,
+      tags: [topic.keyword, topic.categoryNameKo, '트렌드', '핫플', '꿀템'],
+      htmlContent: `<p>${topic.keyword} 실시간 분석 내용입니다.</p>`,
       verifiedLinks,
       coupangUrl: coupangSearchUrl,
     };

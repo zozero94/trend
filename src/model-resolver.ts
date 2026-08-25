@@ -131,3 +131,101 @@ export function safeJsonParse<T>(rawText: string, fallback: T): T {
     }
   }
 }
+
+export function cleanText(text: string): string {
+  return (text || '')
+    .replace(/^["']|["']$/g, '')
+    .replace(/\*\*/g, '')
+    .trim();
+}
+
+export function cleanHtml(html: string): string {
+  if (!html) return '';
+  return html
+    .replace(/\\"/g, '"')
+    .replace(/\\n/g, '\n')
+    .replace(/\\t/g, '\t')
+    .replace(/^```html\s*/i, '')
+    .replace(/^```\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .replace(/\\r/g, '')
+    .trim();
+}
+
+/**
+ * JSON 파싱 실패 시에도 순수 HTML 본문과 제목을 100% 정제 추출하는 복구 파서
+ */
+export function extractCleanTrendPostFromRawText(
+  rawText: string,
+  defaultTitle: string,
+  category: any,
+  categoryNameKo: string,
+  tags: string[],
+  verifiedLinks: any[] = [],
+  coupangUrl?: string
+): any {
+  // 1. 정상 JSON 파싱 시도
+  const parsed = safeJsonParse<any>(rawText, null);
+  if (parsed && parsed.title && parsed.htmlContent) {
+    return {
+      title: cleanText(parsed.title),
+      summary: cleanText(parsed.summary || '최신 트렌드 심층 분석'),
+      htmlContent: cleanHtml(parsed.htmlContent),
+      category,
+      categoryNameKo,
+      tags: Array.isArray(parsed.tags) && parsed.tags.length > 0 ? parsed.tags : tags,
+      metaDescription: cleanText(parsed.metaDescription || parsed.summary || defaultTitle),
+      verifiedLinks,
+      coupangUrl: parsed.coupangUrl || coupangUrl,
+    };
+  }
+
+  // 2. 정규식을 통한 비정형 JSON 복구 (Unescaped string 파싱)
+  let title = defaultTitle;
+  const titleMatch = rawText.match(/"title"\s*:\s*"([^"]+)"/);
+  if (titleMatch) title = titleMatch[1];
+
+  let summary = '실시간 트렌드 및 최신 정보 심층 분석';
+  const summaryMatch = rawText.match(/"summary"\s*:\s*"([^"]+)"/);
+  if (summaryMatch) summary = summaryMatch[1];
+
+  let htmlContent = '';
+  const htmlMatch = rawText.match(/"htmlContent"\s*:\s*"([\s\S]*)/);
+  if (htmlMatch) {
+    let rawHtml = htmlMatch[1];
+    rawHtml = rawHtml
+      .replace(/"\s*,\s*"\w+"[\s\S]*$/, '')
+      .replace(/"\s*}\s*```?$/, '')
+      .replace(/"\s*$/, '');
+    htmlContent = cleanHtml(rawHtml);
+  } else {
+    // 3. 본문 내 순수 HTML 태그 영역만 탐색
+    const tagMatch = rawText.match(/(<(div|p|h2|h1|section)[\s\S]*<\/(div|p|h2|h1|section)>)/);
+    if (tagMatch) {
+      htmlContent = cleanHtml(tagMatch[1]);
+    } else {
+      // JSON 키워드 찌꺼기 완전 제거
+      const sanitized = rawText
+        .replace(/```json/gi, '')
+        .replace(/```/g, '')
+        .replace(/\{\s*"title"[\s\S]*?"htmlContent"\s*:\s*"?/gi, '')
+        .replace(/"\s*,\s*"(tags|summary|metaDescription)"[\s\S]*$/, '')
+        .trim();
+      htmlContent = `<p>${sanitized.replace(/\n\n/g, '</p><p>').replace(/\n/g, '<br/>')}</p>`;
+    }
+  }
+
+  return {
+    title: cleanText(title),
+    summary: cleanText(summary),
+    htmlContent,
+    category,
+    categoryNameKo,
+    tags,
+    metaDescription: cleanText(summary),
+    verifiedLinks,
+    coupangUrl,
+  };
+}
+
+export const extractCleanPostFromRawText = extractCleanTrendPostFromRawText;

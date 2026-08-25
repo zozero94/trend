@@ -2,7 +2,7 @@ import 'dotenv/config';
 import { selectTopTrendCandidates, resolveCustomTopic } from './collector.js';
 import { sanitizeSearchKeywords, verifyUrlAndCaptureScreenshot, auditAndFixHtmlLinks } from './verifier.js';
 import { generateInitialTrendPost } from './ai.js';
-import { executeTwoRoundTrendReviewLoop } from './reviewer.js';
+import { executeIterativeTrendReviewLoop } from './reviewer.js';
 import { BloggerClient } from './blogger.js';
 import { TelegramNotifier } from './telegram.js';
 import { TrendTopic, VerifiedLink } from './types.js';
@@ -16,7 +16,7 @@ function escapeHtml(text: string): string {
 
 async function runTrendPipeline() {
   console.log('================================================================');
-  console.log('🚀 [트렌드 2호점] 16인 AI 에이전트 & 멀티모달 랜딩 검증 자동화 파이프라인');
+  console.log('🚀 [트렌드 2호점] 18인 AI 에이전트 & 멀티모달 랜딩 검증 자동화 파이프라인');
   console.log('================================================================');
 
   const geminiApiKey = process.env.GEMINI_API_KEY;
@@ -72,8 +72,8 @@ async function runTrendPipeline() {
       console.log(`   - 탐지 소스: ${topic.sources.join(', ')} (신뢰도 점수: ${topic.matchScore}점)`);
       console.log(`================================================================`);
 
-      // --- 2단계: 표준 키워드 정제 & 멀티모달(DOM+Vision) 랜딩 순차 정밀 검증 (메모리 절감) ---
-      console.log('\n[2단계] 표준 키워드 정제 및 Playwright 4대 랜딩(공식처·네이버·유튜브·쿠팡) 순차 검증...');
+      // --- 2단계: 표준 키워드 정제 & 공식 랜딩 멀티모달(DOM+Vision) 정밀 검증 ---
+      console.log('\n[2단계] 표준 키워드 정제 및 Playwright 공식 랜딩 정밀 검증...');
       const sanitized = await sanitizeSearchKeywords(geminiApiKey, topic);
       console.log(`   - 오탈자 없는 표준 키워드: "${sanitized.exactTopicKeyword}"`);
       console.log(`   - 쿠팡 100% 검색용 상품명: "${sanitized.exactProductKeyword}"`);
@@ -81,9 +81,9 @@ async function runTrendPipeline() {
 
       const linkQueue = [
         { url: sanitized.officialLandingUrl, keyword: sanitized.exactTopicKeyword, type: 'general' as const },
-        { url: sanitized.naverSearchUrl, keyword: sanitized.exactTopicKeyword, type: 'naver' as const },
-        { url: sanitized.youtubeSearchUrl, keyword: sanitized.exactTopicKeyword, type: 'youtube' as const },
-        { url: sanitized.coupangSearchUrl, keyword: sanitized.exactProductKeyword, type: 'coupang' as const },
+        ...(topic.category === 'SHOPPING_ITEM'
+          ? [{ url: sanitized.coupangSearchUrl, keyword: sanitized.exactProductKeyword, type: 'coupang' as const }]
+          : []),
       ];
 
       const verifiedLinks: VerifiedLink[] = [];
@@ -110,14 +110,14 @@ async function runTrendPipeline() {
       );
       console.log(`📄 작성된 초안 제목: "${initialPost.title}"`);
 
-      // --- 4단계: 19인 트렌드/바이럴/법률 에이전트 최소 2회+75점 돌파 감수 및 리라이팅 ---
-      console.log('\n[4단계] 19인의 바이럴/트렌드/법률 전문가 감수 루프 실행 (최소 2회 + 75점 돌파제)...');
-      const reviewResult = await executeTwoRoundTrendReviewLoop(geminiApiKey, initialPost, topic);
+      // --- 4단계: 18인 트렌드/바이럴/법률 에이전트 최소 2회+75점 돌파 감수 및 리라이팅 ---
+      console.log('\n[4단계] 18인의 바이럴/트렌드/법률 전문가 감수 루프 실행 (최소 2회 + 75점 돌파제)...');
+      const reviewResult = await executeIterativeTrendReviewLoop(geminiApiKey, initialPost, topic);
       const { finalPost, reviewSummary, passed, finalScore } = reviewResult;
 
       // ★ [품질 방어선] 75점 미만 시 차순위 주제로 자동 전환 & 재탐구
       if (!passed) {
-        console.warn(`\n🚫 [후보 ${candidateIdx + 1} 반려] 19인 종합 점수(${finalScore}점)가 75점 기준 미달!`);
+        console.warn(`\n🚫 [후보 ${candidateIdx + 1} 반려] 18인 종합 점수(${finalScore}점)가 75점 기준 미달!`);
         const nextCandidate = candidateTopics[candidateIdx + 1];
 
         if (telegramBotToken && telegramChatId) {
@@ -197,11 +197,11 @@ async function runTrendPipeline() {
 
   if (publishedSuccess) {
     console.log('\n================================================================');
-    console.log('🎉 2호점 16인 감수 & 멀티모달 무인 자동화 파이프라인 100% 완료!');
+    console.log('🎉 2호점 18인 감수 & 멀티모달 무인 자동화 파이프라인 100% 완료!');
     console.log('📱 텔레그램에서 검토 후 [✅ 즉시 정식 발행] 버튼을 눌러주세요.');
     console.log('================================================================');
   } else {
-    console.log('\n⚠️ [2호점 파이프라인 종료] 기준(80점)을 통과한 유효 원고가 없어 안전하게 종료되었습니다.\n');
+    console.log('\n⚠️ [2호점 파이프라인 종료] 기준(75점)을 통과한 유효 원고가 없어 안전하게 종료되었습니다.\n');
   }
 }
 
