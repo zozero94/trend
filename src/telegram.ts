@@ -38,7 +38,9 @@ ${verifiedLinksText}
 🏛️ 감수 결과:
 ${reviewSummary}
 
-Blogger ID: ${bloggerPostId}
+🌐 웹진 상세: https://trend.zozero94.com/post.html?id=${bloggerPostId}
+🆔 Blogger ID: ${bloggerPostId}
+
 아래 버튼을 눌러 즉시 발행하거나 취소하세요:`;
 
     const inlineKeyboard = {

@@ -9,12 +9,8 @@
       "destination": "/api/rss"
     },
     {
-      "source": "/api/(.*)",
-      "destination": "/api/$1"
-    },
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
+      "source": "/feed",
+      "destination": "/api/rss"
     }
   ]
 }

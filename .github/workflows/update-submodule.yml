@@ -1,0 +1,27 @@
+name: Auto-Update Shared UI Submodule
+
+on:
+  repository_dispatch:
+    types: [update-submodule]
+  workflow_dispatch:
+
+jobs:
+  update-submodule:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Update submodules
+        run: |
+          git submodule update --remote --merge
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add public/shared
+          git commit -m "chore(deps): Auto-update shared-ui submodule to latest" || echo "No changes to commit"
+          git push
