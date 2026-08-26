@@ -10,6 +10,14 @@ on:
         description: '특정 키워드로 포스팅 생성 (비워두면 실시간 자동 탐지)'
         required: false
         default: ''
+      postId:
+        description: '수정할 Blogger Post ID (비워두면 신규 생성)'
+        required: false
+        default: ''
+      userFeedback:
+        description: '사용자 수정 지시사항'
+        required: false
+        default: ''
 
 jobs:
   trend-posting:
@@ -42,9 +50,17 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN || vars.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID || vars.TELEGRAM_CHAT_ID }}
           CUSTOM_KEYWORD: ${{ github.event.inputs.keyword }}
+          REVISE_POST_ID: ${{ github.event.inputs.postId }}
+          USER_FEEDBACK: ${{ github.event.inputs.userFeedback }}
         run: |
+          ARGS=""
           if [ -n "$CUSTOM_KEYWORD" ]; then
-            npm run pipeline -- --keyword="$CUSTOM_KEYWORD"
-          else
-            npm run pipeline
+            ARGS="$ARGS --keyword=\"$CUSTOM_KEYWORD\""
           fi
+          if [ -n "$REVISE_POST_ID" ]; then
+            ARGS="$ARGS --post-id=\"$REVISE_POST_ID\""
+          fi
+          if [ -n "$USER_FEEDBACK" ]; then
+            ARGS="$ARGS --feedback=\"$USER_FEEDBACK\""
+          fi
+          npm run pipeline -- $ARGS

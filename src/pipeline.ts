@@ -7,10 +7,10 @@ import {
   getDefaultFallbackForCategory,
 } from './verifier.js';
 import { generateInitialTrendPost } from './ai.js';
-import { executeIterativeTrendReviewLoop } from './reviewer.js';
+import { executeIterativeTrendReviewLoop, rewriteTrendPostWithFeedback } from './reviewer.js';
 import { BloggerClient } from './blogger.js';
 import { TelegramNotifier } from './telegram.js';
-import { TrendTopic, VerifiedLink } from './types.js';
+import { TrendTopic, VerifiedLink, AgentFeedback, TrendPost, TrendCategory } from './types.js';
 
 function escapeHtml(text: string): string {
   return (text || '')
@@ -37,8 +37,157 @@ async function runTrendPipeline() {
   const telegramChatId = process.env.TELEGRAM_CHAT_ID;
   const coupangPartnersId = process.env.COUPANG_PARTNERS_ID || 'AF2968960';
 
-  const customTopicKeyword = process.argv.slice(2).join(' ').trim();
-  const isDryRun = process.env.DRY_RUN === 'true';
+  // CLI 인자 및 환경변수 파싱
+  const args = process.argv.slice(2);
+  let customTopicKeyword = process.env.CUSTOM_KEYWORD || '';
+  let revisePostId = process.env.REVISE_POST_ID || '';
+  let userFeedback = process.env.USER_FEEDBACK || '';
+  let isDryRun = process.env.DRY_RUN === 'true';
+
+  for (const arg of args) {
+    if (arg.startsWith('--keyword=')) {
+      customTopicKeyword = arg.split('=')[1].replace(/^["']|["']$/g, '');
+    } else if (arg.startsWith('--post-id=')) {
+      revisePostId = arg.split('=')[1].replace(/^["']|["']$/g, '');
+    } else if (arg.startsWith('--feedback=')) {
+      userFeedback = arg.split('=')[1].replace(/^["']|["']$/g, '');
+    } else if (arg === '--dry-run') {
+      isDryRun = true;
+    } else if (!arg.startsWith('--') && !customTopicKeyword) {
+      customTopicKeyword = arg;
+    }
+  }
+
+  // =========================================================================
+  // ★ [원격 피드백 수정 모드] 기존 Blogger 글 로드 ➔ 사용자 지침 주입 ➔ 18인 감수 루프 ➔ Blogger PUT
+  // =========================================================================
+  if (revisePostId) {
+    console.log(`\n🔄 [피드백 원격 수정 모드 가동]`);
+    console.log(`   - 대상 Post ID: "${revisePostId}"`);
+    console.log(`   - 사용자 지침: "${userFeedback || '전면 고도화'}"`);
+
+    if (!bloggerBlogId || !bloggerClientId || !bloggerClientSecret || !bloggerRefreshToken) {
+      throw new Error('Blogger API 자격증명이 부족합니다.');
+    }
+
+    const blogger = new BloggerClient(bloggerBlogId, bloggerClientId, bloggerClientSecret, bloggerRefreshToken);
+    const existingPost = await blogger.getPostById(revisePostId);
+    if (!existingPost) {
+      throw new Error(`해당 Post ID(${revisePostId})의 글을 Blogger에서 찾을 수 없습니다.`);
+    }
+
+    const primaryCategory = (existingPost.labels && existingPost.labels.length > 0)
+      ? existingPost.labels[0]
+      : '화제의 밈/이슈';
+
+    let matchedCategory: TrendCategory = 'MEME_TREND';
+    if (primaryCategory.includes('쇼핑') || primaryCategory.includes('꿀템')) matchedCategory = 'SHOPPING_ITEM';
+    else if (primaryCategory.includes('핫플레이스') || primaryCategory.includes('맛집') || primaryCategory.includes('성수')) matchedCategory = 'HOT_PLACE';
+
+    const topicKeyword = (existingPost.labels && existingPost.labels.length > 1)
+      ? existingPost.labels[1]
+      : existingPost.title.slice(0, 20);
+
+    const topic: TrendTopic = {
+      keyword: topicKeyword,
+      category: matchedCategory,
+      categoryNameKo: primaryCategory,
+      headlineHook: `[피드백 반영] ${userFeedback || '품질 개선'}`,
+      sources: ['google_trends'],
+      matchScore: 99,
+      searchQueries: [topicKeyword],
+    };
+
+    const sanitized = await sanitizeSearchKeywords(geminiApiKey, topic);
+    const linkQueue = [
+      { url: sanitized.officialLandingUrl, keyword: sanitized.exactTopicKeyword, type: 'general' as const },
+      ...(topic.category === 'SHOPPING_ITEM'
+        ? [{ url: sanitized.coupangSearchUrl, keyword: sanitized.exactProductKeyword, type: 'coupang' as const }]
+        : []),
+    ];
+
+    const verifiedLinks: VerifiedLink[] = [];
+    for (const item of linkQueue) {
+      const verified = await verifyUrlAndCaptureScreenshot(geminiApiKey, item.url, item.keyword, item.type);
+      if (item.type === 'general' && (!verified.isHealthy || !verified.isContentMatched || (verified.relevanceScore ?? 0) < 75)) {
+        const fallback = getDefaultFallbackForCategory(topic.keyword, topic.category);
+        sanitized.officialLandingUrl = fallback.officialLandingUrl;
+        sanitized.officialSiteName = fallback.officialSiteName;
+        sanitized.isDirectLink = false;
+        verified.finalUrl = fallback.officialLandingUrl;
+        verified.originalUrl = fallback.officialLandingUrl;
+        verified.linkType = 'VERIFIED_SEARCH';
+        verified.pageTitle = fallback.officialSiteName;
+        verified.isHealthy = true;
+        verified.isContentMatched = true;
+        verified.relevanceScore = 90;
+      }
+      verifiedLinks.push(verified);
+    }
+
+    const currentTrendPost: TrendPost = {
+      title: existingPost.title,
+      summary: '기존 원고 피드백 수정',
+      metaDescription: existingPost.title,
+      category: matchedCategory,
+      categoryNameKo: primaryCategory,
+      tags: existingPost.labels || [topic.keyword, '트렌드'],
+      htmlContent: existingPost.content,
+      verifiedLinks,
+      coupangUrl: sanitized.coupangSearchUrl,
+    };
+
+    const userFeedbackItem: AgentFeedback = {
+      agentName: '★ 사용자 긴급 디렉팅',
+      role: '텔레그램 원격 총괄 디렉터',
+      score: 3,
+      strengths: '기존 글의 맥락 유지',
+      improvements: `[사용자 직접 지시]: ${userFeedback}. 이 지침을 다른 모든 규칙보다 100% 최우선으로 본문에 반영하여 수정할 것.`,
+    };
+
+    console.log('\n[수정 4단계] 18인 전문 감수단 & 사용자 피드백 결합 리라이팅 루프 실행...');
+    const initialRewritten = await rewriteTrendPostWithFeedback(
+      geminiApiKey,
+      currentTrendPost,
+      [userFeedbackItem],
+      topic,
+      1
+    );
+
+    const reviewResult = await executeIterativeTrendReviewLoop(geminiApiKey, initialRewritten, topic);
+    const { finalPost, reviewSummary } = reviewResult;
+
+    finalPost.htmlContent = auditAndFixHtmlLinks(
+      finalPost.htmlContent,
+      {
+        youtube: sanitized.youtubeSearchUrl,
+        naver: sanitized.naverSearchUrl,
+        naverMap: sanitized.naverMapUrl,
+        coupang: sanitized.coupangSearchUrl,
+        officialLandingUrl: sanitized.officialLandingUrl,
+      },
+      sanitized.exactTopicKeyword,
+      topic.category
+    );
+
+    console.log(`\n[수정 5단계] Google Blogger 원고 즉시 교체 (Post ID: ${revisePostId})...`);
+    await blogger.updatePost(revisePostId, finalPost.title, finalPost.htmlContent, existingPost.labels || []);
+    console.log(`✅ Blogger 글 수정 완료!`);
+
+    if (telegramBotToken && telegramChatId) {
+      const telegram = new TelegramNotifier(telegramBotToken, telegramChatId, bloggerBlogId);
+      await telegram.sendTrendDraftNotification(
+        finalPost,
+        topic,
+        revisePostId,
+        `[피드백 반영] ${reviewSummary}`,
+        sanitized.officialSiteName,
+        sanitized.officialLandingUrl,
+        existingPost.url
+      );
+    }
+    return;
+  }
 
   let candidateTopics: TrendTopic[] = [];
 
