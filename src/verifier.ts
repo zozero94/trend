@@ -14,22 +14,25 @@ export async function findOfficialOrBestLandingUrl(
   officialLandingUrl: string;
   isDirectLink: boolean;
 }> {
+  const defaultFallback = getDefaultFallbackForCategory(topicKeyword, category);
   const ai = new GoogleGenAI({ apiKey });
-  const prompt = `당신은 대한민국 최고의 웹 링크 & 공식 판매처 아카이브 전문가입니다.
+
+  const prompt = `당신은 대한민국 웹 링크 & 공식 출처 아카이브 전문가입니다.
 주제: "${topicKeyword}" (카테고리: ${category})
 
 [지침]
-독자가 헛걸음하지 않고 곧바로 접속할 수 있는 **가장 신뢰할 수 있는 공식 다이렉트 웹사이트**를 발굴하세요.
-- 국립박물관 뮷즈/키링: 국립박물관 문화재단 뮷즈 공식몰 (https://www.museumshop.or.kr)
-- 팝업스토어/핫플: 카카오맵/네이버 지도 예약 페이지 또는 공식 인스타그램/캐치테이블
-- 브랜드 굿즈/신상: 해당 브랜드 공식 직영몰 또는 공식 프로모션 페이지
-- 공연/스포츠/이벤트: 인터파크 티켓 또는 공식 예매처
+1. 주제와 100% 직결되는 **실제 존재하는 공식 웹사이트/예약처/브랜드몰/보도자료 URL**을 발굴하세요.
+2. ⚠️ 절대 없는 URL이나 가짜 도메인을 지어내지 마세요. 확실하지 않거나 일반 이슈/밈/뉴스인 경우 isDirectLink를 false로 하고 기본 네이버 검색 URL을 반환하세요.
+3. 카테고리별 기준:
+   - SHOPPING_ITEM: 실제 브랜드 공식몰/스마트스토어/쿠팡 정품 판매처 (확실한 경우만)
+   - HOT_PLACE: 네이버 플레이스/캐치테이블/공식 인스타그램/예약 페이지
+   - MEME_TREND / GENERAL: 공식 발표처/원문 유튜브/공식 보도자료
 
 반드시 다음 JSON 형식으로만 응답하세요:
 {
-  "officialSiteName": "공식몰/공식처 명칭 (예: 국립박물관 뮷즈 공식몰)",
-  "officialLandingUrl": "https://...",
-  "isDirectLink": true
+  "officialSiteName": "실제 사이트 명칭 (예: OO 공식 홈페이지 / OO 네이버 플레이스)",
+  "officialLandingUrl": "https://실제주소...",
+  "isDirectLink": true (확실한 실제 공식/대표 링크인 경우만 true, 검색 대체 시 false)
 }`;
 
   try {
@@ -39,23 +42,53 @@ export async function findOfficialOrBestLandingUrl(
     });
     const parsed = safeJsonParse<{ officialSiteName: string; officialLandingUrl: string; isDirectLink: boolean }>(
       res.text || '{}',
-      {
-        officialSiteName: '공식 정보 검색',
-        officialLandingUrl: `https://m.search.naver.com/search.naver?query=${encodeURIComponent(topicKeyword)}`,
-        isDirectLink: false,
-      }
+      defaultFallback
     );
+
+    // URL 유효성 1차 검증
+    const isValidUrl = parsed.officialLandingUrl &&
+      parsed.officialLandingUrl.startsWith('http') &&
+      !parsed.officialLandingUrl.includes('example.com') &&
+      !(parsed.officialLandingUrl.includes('museumshop.or.kr') && !topicKeyword.includes('뮷즈') && !topicKeyword.includes('박물관'));
+
+    if (!isValidUrl || !parsed.isDirectLink) {
+      return defaultFallback;
+    }
+
     return {
-      officialSiteName: parsed.officialSiteName || '공식 정보 검색',
-      officialLandingUrl: parsed.officialLandingUrl && parsed.officialLandingUrl.startsWith('http')
-        ? parsed.officialLandingUrl
-        : `https://m.search.naver.com/search.naver?query=${encodeURIComponent(topicKeyword)}`,
-      isDirectLink: parsed.isDirectLink ?? false,
+      officialSiteName: parsed.officialSiteName || defaultFallback.officialSiteName,
+      officialLandingUrl: parsed.officialLandingUrl,
+      isDirectLink: true,
     };
   } catch {
+    return defaultFallback;
+  }
+}
+
+/**
+ * 카테고리별 최적 기본 폴백 URL 및 명칭 반환
+ */
+export function getDefaultFallbackForCategory(
+  topicKeyword: string,
+  category: TrendCategory
+): { officialSiteName: string; officialLandingUrl: string; isDirectLink: boolean } {
+  const cleanKeyword = topicKeyword.trim();
+  if (category === 'SHOPPING_ITEM') {
     return {
-      officialSiteName: '공식 정보 검색',
-      officialLandingUrl: `https://m.search.naver.com/search.naver?query=${encodeURIComponent(topicKeyword)}`,
+      officialSiteName: `${cleanKeyword} 실시간 가격 & 리뷰 검색`,
+      officialLandingUrl: `https://m.search.naver.com/search.naver?query=${encodeURIComponent(cleanKeyword + ' 최저가')}`,
+      isDirectLink: false,
+    };
+  } else if (category === 'HOT_PLACE') {
+    return {
+      officialSiteName: `${cleanKeyword} 네이버 지도 정보`,
+      officialLandingUrl: `https://map.naver.com/v5/search/${encodeURIComponent(cleanKeyword)}`,
+      isDirectLink: false,
+    };
+  } else {
+    return {
+      officialSiteName: `${cleanKeyword} 실시간 관련 소식 & 반응`,
+      officialLandingUrl: `https://m.search.naver.com/search.naver?query=${encodeURIComponent(cleanKeyword)}`,
       isDirectLink: false,
     };
   }
@@ -96,6 +129,7 @@ export async function sanitizeSearchKeywords(
     exactProductKeyword: topic.keyword,
     officialSiteName: officialInfo.officialSiteName,
     officialLandingUrl: officialInfo.officialLandingUrl,
+    isDirectLink: officialInfo.isDirectLink,
     naverSearchUrl: urls.naverSearchUrl,
     youtubeSearchUrl: urls.youtubeSearchUrl,
     naverMapUrl: urls.naverMapUrl,
@@ -328,9 +362,19 @@ export function auditAndFixHtmlLinks(
   fixedHtml = fixedHtml.replace(/href=['"]https:\/\/map\.naver\.com\/?['"]/g, `href="${validUrls.naverMap}"`);
   fixedHtml = fixedHtml.replace(/href=['"]https:\/\/m\.map\.naver\.com\/?['"]/g, `href="${validUrls.naverMap}"`);
 
-  // 4. 공식 직통 URL 치환 (존재 시)
+  // 4. 공식/대표 바로가기 히어로 배너 URL 강제 치환 (존재 시)
   if (validUrls.officialLandingUrl) {
-    fixedHtml = fixedHtml.replace(/href=['"]https?:\/\/(?:www\.)?(?:museumshop|official|smartstore|brand)[^'"]*['"]/gi, `href="${validUrls.officialLandingUrl}"`);
+    // 4-1. trend-hero-banner 클래스 또는 대표 배너 박스 내부의 a 태그 href 전수 치환
+    fixedHtml = fixedHtml.replace(
+      /(<div[^>]*?(?:trend-hero-banner|#f1f5f9)[^>]*?>[\s\S]*?<a\s+[^>]*?href=)["'][^"']*["']/gi,
+      `$1"${validUrls.officialLandingUrl}"`
+    );
+
+    // 4-2. LLM이 생성한 대표 링크 일반 패턴 치환
+    fixedHtml = fixedHtml.replace(
+      /href=['"]https?:\/\/(?:www\.)?(?:museumshop|official|smartstore|brand|search\.naver|m\.search\.naver)[^'"]*['"]/gi,
+      `href="${validUrls.officialLandingUrl}"`
+    );
   }
 
   // 5. 쿠팡 링크 WAF 차단(Incident Code D21752C_...) 방어: 모든 변형(단축링크 포함) 교정

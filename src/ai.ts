@@ -21,19 +21,46 @@ export async function generateInitialTrendPost(
     verifiedLinks[0];
 
   const isDirectOfficial = officialLink?.linkType === 'DIRECT_OFFICIAL';
-  const officialUrl = officialLink?.finalUrl || `https://m.search.naver.com/search.naver?query=${encodeURIComponent(topic.keyword)}`;
-  const officialSiteTitle = isDirectOfficial ? '🏛️ 공식 오피셜 바로가기' : '🔍 실시간 공식 정보 확인';
-  const officialCardDescription = isDirectOfficial
-    ? '공식몰, 공식 예약 사이트 및 상세 공지를 바로 확인하세요.'
-    : '실시간 입고 현황, 최신 공지 및 상세 정보를 확인하세요.';
-  const officialButtonText = isDirectOfficial ? '공식 바로가기 &rarr;' : '상세 정보 확인 &rarr;';
+  const officialUrl = officialLink?.finalUrl || officialLink?.originalUrl || `https://m.search.naver.com/search.naver?query=${encodeURIComponent(topic.keyword)}`;
 
-  const verifiedLinksSummary = verifiedLinks
-    .map(
-      (v, i) =>
-        `[링크 ${i + 1}] 종류: ${v.linkType || '검색'} | URL: ${v.finalUrl || v.originalUrl} | 페이지명: ${v.pageTitle} | 상태: ${v.isHealthy ? '정상' : '검색대체'} | 검증: ${v.verificationNotes}`
-    )
-    .join('\n');
+  let officialSiteTitle = '';
+  let officialCardDescription = '';
+  let officialButtonText = '';
+
+  if (topic.category === 'SHOPPING_ITEM') {
+    if (isDirectOfficial) {
+      officialSiteTitle = `🛒 [공식몰] ${topic.keyword} 바로가기`;
+      officialCardDescription = '공식 직영몰에서 정품 인증 및 상세 스펙을 확인하세요.';
+      officialButtonText = '공식몰 바로가기 &rarr;';
+    } else {
+      officialSiteTitle = `🔍 [최저가 검색] ${topic.keyword} 실시간 가격 비교`;
+      officialCardDescription = '포털 실시간 최저가, 입고 현황 및 구매자 후기를 확인하세요.';
+      officialButtonText = '최저가 비교하기 &rarr;';
+    }
+  } else if (topic.category === 'HOT_PLACE') {
+    if (isDirectOfficial) {
+      officialSiteTitle = `📍 [공식 안내] ${topic.keyword} 예약 & 상세 정보`;
+      officialCardDescription = '공식 예약처, 팝업 일정 및 사전 등록 안내를 확인하세요.';
+      officialButtonText = '장소 정보 확인 &rarr;';
+    } else {
+      officialSiteTitle = `🗺️ [지도 확인] ${topic.keyword} 위치 & 영업 정보`;
+      officialCardDescription = '네이버 지도에서 정확한 도로명 주소, 영업시간 및 방문자 리뷰를 확인하세요.';
+      officialButtonText = '지도에서 보기 &rarr;';
+    }
+  } else {
+    // MEME_TREND, GENERAL, etc.
+    if (isDirectOfficial) {
+      officialSiteTitle = `📰 [공식 출처] ${topic.keyword} 원문 및 발표 자료`;
+      officialCardDescription = '공식 발표 채널 및 원본 출처를 바로 확인하세요.';
+      officialButtonText = '원문 확인 &rarr;';
+    } else {
+      officialSiteTitle = `⚡ [실시간 소식] ${topic.keyword} 최신 반응 & 이슈 정리`;
+      officialCardDescription = '포털 실시간 관련 보도 및 대중 반응을 바로 확인하세요.';
+      officialButtonText = '실시간 반응 보기 &rarr;';
+    }
+  }
+
+  const verifiedLinksSummary = `[단일 대표 링크] 명칭: ${officialSiteTitle} | URL: ${officialUrl} | 성격: ${isDirectOfficial ? '공식 직통' : '포털 검색/지도'}`;
 
   const systemInstruction = `당신은 2030 트렌드 이슈를 빠르고 정확하게 분석하는 트렌드 전문 에디터입니다.
 점심시간(12:00) 스마트폰을 켠 2030 직장인과 학생들이 호기심을 참지 못하고 클릭할 수밖에 없는 **키워드 중심 후킹 제목**과 **군더더기 없는 고품질 반응형 HTML 칼럼**을 작성하세요.
@@ -46,7 +73,7 @@ export async function generateInitialTrendPost(
 □ 🛡️ 법적 컴플라이언스 준수 (비방/명예훼손, 공정위 고지 누락 1건당 변호인 -5점)
 □ 제목: 숫자/구체 키워드 + 궁금증 유발 장치 (없으면 헤드라인 마스터 각 -3점), 낚시 금지, 브랜드/밈 오탈자 1건당 -4점
 □ 3줄 핵심 요약 콜아웃 박스 (누락 시 모바일 UX 위원 -3점)
-□ 🏛️ 오피셜/검색 바로가기 카드 (누락 시 랜딩 팩트체커 -4점)
+□ 🏛️ 대표 바로가기 카드 (누락 시 랜딩 팩트체커 -4점)
 □ 내돈내산 치명적 단점/호불호 문단 + "이런 사람에겐 비추천" 명시 (단점 문단 누락 시 솔직 리뷰어 -6점)
 □ FAQ 3선 — 검색어형 질문 + 수치/날짜/장소가 담긴 팩트 답변 (누락 시 FAQ 설계관 -5점)
 □ 모든 문단 2~3문장 (4문장 이상 문단 1개라도 존재 시 UX 위원 -6점)
@@ -55,7 +82,7 @@ export async function generateInitialTrendPost(
 □ 밈 주제: 원본 출처 명시(-4점), 유래 추측/왜곡 서술 금지(-4점)
 □ 쇼핑 주제: 쿠팡 CTA 배너(-4점) + 공정위 파트너스 고지 문구(누락 시 컴플라이언스 -6점)
 □ 도입 3문장 내 끝까지 읽을 이유 예고 + 섹션 간 브릿지 문장 + 결말 꿀팁 보상 (체류시간 부스터 각 -2~3점)
-□ ${isDirectOfficial ? '공식 직영몰/예약처가 확인되었으므로 "공식 사이트에서 확인하세요"라고 정확히 서술' : '공식 직영몰이 부재하여 검색 링크로 대체되었으므로 "공식몰"이라는 허위 서술 금지, "실시간 입고 및 최저가 검색"으로 본문 서술'}
+□ ${isDirectOfficial ? '공식 직영몰/예약처가 확인되었으므로 "공식 사이트에서 확인하세요"라고 정확히 서술' : '공식 직영몰이 부재하여 검색/지도 링크로 대체되었으므로 "공식몰"이라는 허위 서술 금지, 사실에 맞게 서술'}
 □ 근거 없는 최상급 표현("인생템", "무조건 사세요") 및 일방적 찬양 톤 금지 (악취 필터링관 감점)
 □ [이미지: ...] 등 더미 텍스트 1개라도 존재 시 더미 감수관 즉시 1점 처리
 
@@ -64,7 +91,7 @@ export async function generateInitialTrendPost(
    - "대한민국에서 가장 감각적인 에디터입니다", "안녕하세요", "오늘은 화제의 ~에 대해 알아보겠습니다" 등 인위적인 AI 자기소개 전면 금지!
    - 1문장부터 문제의 핵심 후킹 포인트 및 생생한 현장 팩트로 군더더기 없이 자연스럽게 시작하세요.
 2. **🔗 단 1개의 가장 일치하는 공식/대표 링크 원칙**:
-   - 본문 전체에서 링크는 오직 사전 검증된 **단 1개의 공식/대표 바로가기 배너 카드**만 허용됩니다.
+   - 본문 전체에서 정보성 링크는 오직 사전 검증된 **단 1개의 공식/대표 바로가기 배너 카드**만 허용됩니다.
    - 의미 없는 일반 검색 링크(네이버, 유튜브, 인스타 등)를 본문 중간에 산만하게 마구 도배하는 행위는 엄격히 금지됩니다.
 3. **⚖️ 객관적 사실 입증 & 법적 컴플라이언스 준수**:
    - 객관적으로 검증할 수 없는 뇌피셜, 허위 루머, 주관적 과장 표현을 전면 배제합니다.
@@ -82,7 +109,7 @@ export async function generateInitialTrendPost(
      </div>
 6. **🏛️ 바로가기 배너 카드 (단 1개 필수 삽입)**:
    - 본문 상단에 독자가 바로 확인을 할 수 있는 카드를 단 1개 삽입하세요:
-     <div style="background: #f1f5f9; border: 1.5px solid #cbd5e1; border-radius: 10px; padding: 14px 18px; margin: 20px 0; display: flex; align-items: center; justify-content: space-between;">
+     <div class="trend-hero-banner" style="background: #f1f5f9; border: 1.5px solid #cbd5e1; border-radius: 10px; padding: 14px 18px; margin: 20px 0; display: flex; align-items: center; justify-content: space-between;">
        <div>
          <strong style="color: #0f172a; font-size: 14px;">${officialSiteTitle}</strong>
          <p style="margin: 3px 0 0 0; font-size: 12.5px; color: #64748b;">${officialCardDescription}</p>

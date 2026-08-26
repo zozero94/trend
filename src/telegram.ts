@@ -1,5 +1,12 @@
 import { TrendPost, TrendTopic } from './types.js';
 
+function escapeHtml(text: string): string {
+  return (text || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
 export class TelegramNotifier {
   private botToken: string;
   private chatId: string;
@@ -15,39 +22,40 @@ export class TelegramNotifier {
     post: TrendPost,
     topic: TrendTopic,
     bloggerPostId: string,
-    reviewSummary: string
+    reviewSummary: string,
+    officialSiteName?: string,
+    officialLandingUrl?: string,
+    bloggerPostUrl?: string
   ): Promise<void> {
     const url = `https://api.telegram.org/bot${this.botToken}/sendMessage`;
 
-    const verifiedLinksText = post.verifiedLinks.length > 0
-      ? post.verifiedLinks.map((l, i) => `🔗 [링크 ${i+1}] ${l.pageTitle || '확인'} (${l.isHealthy ? '정상' : '에러'})\n   👉 ${l.originalUrl}`).join('\n')
-      : '🔗 기본 검색 키워드 기반';
+    const tagText = post.tags.map((t) => `#${t.replace(/\s+/g, '')}`).join(' ');
+    const previewWebzineUrl = `https://trend.zozero94.com/post.html?id=${bloggerPostId}`;
+    const cleanOfficialUrl = officialLandingUrl || post.verifiedLinks[0]?.finalUrl || `https://m.search.naver.com/search.naver?query=${encodeURIComponent(topic.keyword)}`;
+    const cleanOfficialName = officialSiteName || `${topic.keyword} 관련 상세 정보`;
+    const cleanBloggerUrl = bloggerPostUrl || `https://www.blogger.com/blog/post/edit/${this.blogId}/${bloggerPostId}`;
 
-    const messageText = `🔥 [트렌드 블로그 2호점 글 생성 완료]
+    const messageText = `📢 <b>[트렌드 매거진 2호점] ${escapeHtml(topic.categoryNameKo)} 포스팅 승인 요청</b>
 
-📌 카테고리: ${topic.categoryNameKo}
-🎯 키워드: #${topic.keyword}
+📝 <b>제목:</b> ${escapeHtml(post.title)}
 
-📰 제목: ${post.title}
+💡 <b>3줄 핵심 요약:</b>
+${escapeHtml(post.summary)}
 
-📝 3줄 요약:
-${post.summary}
+🔗 <b>대표 연계 링크:</b> <a href="${escapeHtml(cleanOfficialUrl)}">${escapeHtml(cleanOfficialName)}</a>
+🏛️ <b>18인 콘텐츠 감수 & 5인 시스템 감사:</b> ${escapeHtml(reviewSummary)}
+🏷️ <b>태그:</b> ${escapeHtml(tagText)}
 
-${verifiedLinksText}
+🌐 <b>웹진 미리보기:</b> <a href="${previewWebzineUrl}">${previewWebzineUrl}</a>
+📱 <b>구글 블로그:</b> <a href="${cleanBloggerUrl}">${cleanBloggerUrl}</a>
 
-🏛️ 감수 결과:
-${reviewSummary}
-
-🌐 웹진 상세: https://trend.zozero94.com/post.html?id=${bloggerPostId}
-🆔 Blogger ID: ${bloggerPostId}
-
-아래 버튼을 눌러 즉시 발행하거나 취소하세요:`;
+아래 버튼을 누르면 <b>즉시 공식 발행</b>됩니다:`;
 
     const inlineKeyboard = {
       inline_keyboard: [
         [
-          { text: '✅ 즉시 발행', callback_data: `publish:${this.blogId}:${bloggerPostId}` },
-          { text: '❌ 글 삭제', callback_data: `delete:${this.blogId}:${bloggerPostId}` },
+          { text: '✅ 즉시 정식 발행', callback_data: `publish:${this.blogId}:${bloggerPostId}` },
+          { text: '❌ 임시글 삭제', callback_data: `delete:${this.blogId}:${bloggerPostId}` },
         ],
       ],
     };
@@ -58,6 +66,8 @@ ${reviewSummary}
       body: JSON.stringify({
         chat_id: this.chatId,
         text: messageText,
+        parse_mode: 'HTML',
+        disable_web_page_preview: false,
         reply_markup: inlineKeyboard,
       }),
       signal: AbortSignal.timeout(10000),
@@ -81,6 +91,7 @@ ${reviewSummary}
           chat_id: this.chatId,
           text,
           parse_mode: parseMode,
+          disable_web_page_preview: false,
         }),
         signal: AbortSignal.timeout(10000),
       });
