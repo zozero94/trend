@@ -173,6 +173,57 @@ export async function fetchNaverAndCommunityTrends(): Promise<TrendRawItem[]> {
 }
 
 /**
+ * 주제 및 키워드가 최근 발행된 글들과 유사/중복인지 정밀 검증
+ */
+export function isTopicDuplicate(targetKeyword: string, pastTitles: string[]): boolean {
+  if (!targetKeyword || !pastTitles || pastTitles.length === 0) return false;
+
+  const cleanTarget = targetKeyword.replace(/[^\w가-힣]/g, '').toLowerCase();
+  if (!cleanTarget) return false;
+
+  // 1) 2글자 이상 핵심 명사 토큰 및 복합어 서브토큰 분리
+  const rawWords = targetKeyword
+    .split(/[\s,·\-_/]+/)
+    .map((w) => w.replace(/[^\w가-힣]/g, '').toLowerCase())
+    .filter((w) => w.length >= 2);
+
+  const subTokens = new Set<string>();
+  for (const w of rawWords) {
+    subTokens.add(w);
+    if (w.length >= 4) {
+      subTokens.add(w.slice(0, 2));
+      subTokens.add(w.slice(2));
+      subTokens.add(w.slice(0, w.length - 1));
+    }
+  }
+  const tokenList = Array.from(subTokens).filter((t) => t.length >= 2);
+
+  for (const title of pastTitles) {
+    const cleanTitle = title.replace(/[^\w가-힣]/g, '').toLowerCase();
+
+    // 2) 전체 키워드 포함 대조
+    if (cleanTitle.includes(cleanTarget) || (cleanTarget.length >= 4 && cleanTarget.includes(cleanTitle))) {
+      return true;
+    }
+
+    // 3) 핵심 2글자 이상 토큰이 제목에서 2개 이상 매칭되는 경우 (예: "성수" + "팝업")
+    const matchedTokens = tokenList.filter((t) => cleanTitle.includes(t));
+    if (matchedTokens.length >= 2) {
+      return true;
+    }
+
+    // 4) 3글자 이상 고유 고유명사 토큰 일치 (예: "두바이", "말랑이", "삐끼삐끼", "암백신", "성수동")
+    for (const token of rawWords) {
+      if (token.length >= 3 && cleanTitle.includes(token)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+/**
  * 5. 5대 소스 전수 수집 및 최근 발행 글 필터링
  */
 export async function collectAllTrendSources(alreadyPublishedTitles: string[] = []): Promise<TrendRawItem[]> {
@@ -192,11 +243,10 @@ export async function collectAllTrendSources(alreadyPublishedTitles: string[] = 
   if (alreadyPublishedTitles.length > 0) {
     console.log(`🔍 [중복 방지 필터링] 최근 발행된 ${alreadyPublishedTitles.length}개 포스트 제목 대조 중...`);
     allItems = allItems.filter((item) => {
-      const isDup = alreadyPublishedTitles.some((title) => {
-        const cleanTitle = title.replace(/[^\w가-힣]/g, '').toLowerCase();
-        const cleanKw = item.keyword.replace(/[^\w가-힣]/g, '').toLowerCase();
-        return cleanTitle.includes(cleanKw) || (cleanKw.length >= 3 && cleanTitle.includes(cleanKw.slice(0, 3)));
-      });
+      const isDup = isTopicDuplicate(item.keyword, alreadyPublishedTitles) || isTopicDuplicate(item.title, alreadyPublishedTitles);
+      if (isDup) {
+        console.log(`   └ [1차 배제] 기발행 유사 키워드 제외: "${item.keyword}"`);
+      }
       return !isDup;
     });
     console.log(`✅ 중복 제외 후 남은 신규 트렌드 후보: ${allItems.length}개`);

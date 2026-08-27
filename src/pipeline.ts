@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { selectTopTrendCandidates, resolveCustomTopic } from './collector.js';
+import { selectTopTrendCandidates, resolveCustomTopic, isTopicDuplicate } from './collector.js';
 import {
   sanitizeSearchKeywords,
   verifyUrlAndCaptureScreenshot,
@@ -189,6 +189,20 @@ async function runTrendPipeline() {
     return;
   }
 
+  // 0단계: 기발행 글 목록 실시간 조회 (중복 주제 원천 차단)
+  if (!bloggerBlogId || !bloggerClientId || !bloggerClientSecret || !bloggerRefreshToken) {
+    throw new Error('Blogger API 자격증명이 부족합니다.');
+  }
+  const blogger = new BloggerClient(bloggerBlogId, bloggerClientId, bloggerClientSecret, bloggerRefreshToken);
+  let pastTitles: string[] = [];
+  try {
+    const recentPosts = await blogger.getPosts(30);
+    pastTitles = recentPosts.map((p) => p.title);
+    console.log(`📚 [중복 원천 차단] 최근 기발행/임시저장 글 ${pastTitles.length}건 목록 확보 완료`);
+  } catch (err) {
+    console.warn('⚠️ 기발행 글 목록 조회 실패, 기본 수집 진행:', err);
+  }
+
   let candidateTopics: TrendTopic[] = [];
 
   if (customTopicKeyword) {
@@ -196,12 +210,12 @@ async function runTrendPipeline() {
     const customTopic = await resolveCustomTopic(geminiApiKey, customTopicKeyword);
     candidateTopics = [customTopic];
   } else {
-    console.log('\n[1단계] 실시간 대세 트렌드 후보 Top 3 지능형 수집 중...');
-    candidateTopics = await selectTopTrendCandidates(geminiApiKey, [], 3);
+    console.log('\n[1단계] 실시간 대세 트렌드 후보 Top 3 지능형 수집 중 (기발행 배제 필터 가동)...');
+    candidateTopics = await selectTopTrendCandidates(geminiApiKey, pastTitles, 3);
   }
 
   if (!candidateTopics || candidateTopics.length === 0) {
-    console.error('❌ 유효한 트렌드 주제를 수집하지 못했습니다.');
+    console.error('❌ 유효한 신규 트렌드 주제를 수집하지 못했습니다.');
     process.exit(1);
   }
 
@@ -215,6 +229,13 @@ async function runTrendPipeline() {
       console.log(`   - 후킹 포인트: ${topic.headlineHook}`);
       console.log(`   - 탐지 소스: ${topic.sources.join(', ')} (신뢰도 점수: ${topic.matchScore}점)`);
       console.log(`================================================================`);
+
+      // ★ [2차 정밀 중복 방어선] LLM이 놓친 기발행 유사 주제가 있는지 토큰/문자열 대조
+      if (!customTopicKeyword && isTopicDuplicate(topic.keyword, pastTitles)) {
+        console.warn(`⚠️ [2차 중복 감지] 후보 ${candidateIdx + 1}번 "${topic.keyword}"는 최근 기발행 글 목록에 이미 존재합니다.`);
+        console.warn(`   ➔ 즉시 스킵하고 다음 후보(${candidateIdx + 2}번)로 자동 전환합니다.`);
+        continue;
+      }
 
       // --- 2단계: 표준 키워드 정제 & 공식 랜딩 멀티모달(DOM+Vision) 정밀 검증 ---
       console.log('\n[2단계] 표준 키워드 정제 및 Playwright 공식 랜딩 정밀 검증...');
