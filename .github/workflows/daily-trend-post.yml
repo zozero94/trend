@@ -2,8 +2,8 @@ name: Daily 2-Times Trend Auto-Posting Pipeline (12:00 & 18:00)
 
 on:
   schedule:
-    # 매일 한국시간 12:00 (UTC 03:00) 및 18:00 (UTC 09:00) 총 2회 실행
-    - cron: '0 3,9 * * *'
+    # 매일 한국시간 12:20 (UTC 03:20) 및 18:20 (UTC 09:20) 총 2회 실행
+    - cron: '20 3,9 * * *'
   workflow_dispatch:
     inputs:
       keyword:
